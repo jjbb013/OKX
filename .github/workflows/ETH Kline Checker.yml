@@ -19,8 +19,9 @@ jobs:
 
       - name: Check for Hanging Man and Send Notification
         run: |
-          #kline='{"code":"0","msg":"","data":[["1747035000000","2596.51","2622","2560.42","2569.83","3664976.32","366497.632","951746991.86836","0"]]}'
-          
+          # 使用从 API 获取的 K 线数据
+          kline="${{ steps.get_kline.outputs.kline }}"
+
           # 从 JSON 数据中提取 K 线信息
           kline_data=$(echo "$kline" | jq -r '.data[0]')
           close=$(echo "$kline_data" | jq -r '.[4]')
@@ -28,10 +29,11 @@ jobs:
           high=$(echo "$kline_data" | jq -r '.[3]')
           low=$(echo "$kline_data" | jq -r '.[2]')
 
-          # 判断下垂线 (Hanging Man)
-          body=$(echo "$close - $open" | bc)
-          range=$(echo "$high - $low" | bc)
+          # 计算 body 和 range
+          body=$(echo "$close - $open" | bc -l)
+          range=$(echo "$high - $low" | bc -l)
 
-          if (( $(echo "$body < 0" | bc -l) && $(echo "$range > 0" | bc -l) && $(echo "$high - $open < $body * 2" | bc -l) )); then
+          # 检查是否为下垂线
+          if [[ $(echo "$body < 0" | bc -l) -eq 1 && $(echo "$range > 0" | bc -l) -eq 1 && $(echo "$high - $open < $body * 2" | bc -l) -eq 1 ]]; then
             curl -X POST "https://api.day.app/oZaeqGLJzRLSxW7dJqeACn/下垂线警报/当前K线为下垂线！?body=ETH-USDT-SWAP&sound=boop"
           fi
