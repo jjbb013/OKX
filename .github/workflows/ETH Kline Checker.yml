@@ -1,0 +1,33 @@
+name: ETH Kline Checker
+
+on:
+  schedule:
+    - cron: '14,29,44,59 * * * *'
+
+jobs:
+  check_kline:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Get ETH-USDT-SWAP Kline Data
+        id: get_kline
+        run: |
+          response=$(curl -s 'https://www.okx.com/api/v5/market/candles?instId=ETH-USDT-SWAP&bar=15m&limit=1')
+          echo "Response: $response"
+          echo "::set-output name=kline::$response"
+
+      - name: Check for Hanging Man and Send Notification
+        run: |
+          kline=$(echo "${{ steps.get_kline.outputs.kline }}" | jq -r '.[0]')
+          close=$(echo "$kline" | jq -r '.[4]')
+          open=$(echo "$kline" | jq -r '.[1]')
+          high=$(echo "$kline" | jq -r '.[3]')
+          low=$(echo "$kline" | jq -r '.[2]')
+          
+          # 判断下垂线 (Hanging Man)
+          body=$(echo "$close - $open" | bc)
+          range=$(echo "$high - $low" | bc)
+
+          if (( $(echo "$body < 0" | bc -l) && $(echo "$range > 0" | bc -l) && $(echo "$high - $open < $body * 2" | bc -l) )); then
+            curl -X POST "https://api.day.app/oZaeqGLJzRLSxW7dJqeACn/下垂线警报/当前K线为下垂线！?body=ETH-USDT-SWAP&sound=boop"
+          fi
