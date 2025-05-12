@@ -13,14 +13,9 @@ CANDLE_INTERVAL = "15min"
 
 def get_okx_kline():
     """获取OKX的最新15分钟K线数据"""
-    end_time = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
-    start_time = (datetime.utcnow() - timedelta(minutes=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
-    
     params = {
         "instId": INSTRUMENT_ID,
         "bar": CANDLE_INTERVAL,
-        "after": start_time,
-        "before": end_time,
         "limit": "1"
     }
     
