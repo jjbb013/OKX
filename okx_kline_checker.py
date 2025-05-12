@@ -2,19 +2,29 @@ import os
 import requests
 import json
 from datetime import datetime, timedelta
+import concurrent.futures
 
 # 配置
 BARK_KEY = os.getenv('BARK_KEY')
 
 # OKX API配置
 OKX_API_URL = "https://www.okx.com/api/v5/market/candles"
-INSTRUMENT_ID = "ETH-USDT-SWAP"
-CANDLE_INTERVAL = "15m"
+CANDLE_INTERVAL = "15m"  # 15分钟K线
 
-def get_okx_kline():
-    """获取OKX的最新15分钟K线数据"""
+# 需要检查的标的列表
+TARGET_SYMBOLS = [
+    "ETH-USDT-SWAP",
+    "DOGE-USDT-SWAP",
+    "BTC-USDT-SWAP",
+    "VINE-USDT-SWAP",
+    "TRUMP-USDT-SWAP",
+    "ADA-USDT-SWAP"
+]
+
+def get_okx_kline(symbol):
+    """获取OKX指定标的的最新15分钟K线数据"""
     params = {
-        "instId": INSTRUMENT_ID,
+        "instId": symbol,
         "bar": CANDLE_INTERVAL,
         "limit": "1"
     }
@@ -25,13 +35,13 @@ def get_okx_kline():
         data = response.json()
         
         if data["code"] == "0" and len(data["data"]) > 0:
-            return data["data"][0]
+            return (symbol, data["data"][0])
         else:
-            print(f"获取K线数据失败: {data}")
-            return None
+            print(f"获取{symbol} K线数据失败: {data}")
+            return (symbol, None)
     except Exception as e:
-        print(f"请求K线数据时出错: {e}")
-        return None
+        print(f"请求{symbol} K线数据时出错: {e}")
+        return (symbol, None)
 
 def is_hanging_man(kline):
     """判断是否为下垂线（倒锤子线）形态"""
@@ -61,6 +71,7 @@ def is_hanging_man(kline):
     
     # 下影线至少是实体的2倍
     lower_shadow_ratio = lower_shadow / body_size
+    
     # 上影线不超过实体的0.5倍
     upper_shadow_ratio = upper_shadow / body_size
     
@@ -88,21 +99,42 @@ def send_bark_notification(message):
         print(f"发送通知失败: {e}")
 
 def main():
-    print("开始检测OKX K线形态...")
+    print("开始检测多个OKX标的的K线形态...")
+    matching_symbols = []
     
-    kline = get_okx_kline()
-    if not kline:
-        print("未能获取有效K线数据")
-        return
+    # 使用线程池并行获取所有标的数据
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        # 提交所有任务到线程池
+        future_to_symbol = {executor.submit(get_okx_kline, symbol): symbol for symbol in TARGET_SYMBOLS}
+        
+        # 收集所有结果
+        for future in concurrent.futures.as_completed(future_to_symbol):
+            symbol = future_to_symbol[future]
+            try:
+                symbol, kline = future.result()
+            except Exception as e:
+                print(f"获取{symbol}数据时发生异常: {e}")
+                continue
+            
+            if kline:
+                print(f"获取到{symbol}的K线数据: {kline}")
+                
+                if is_hanging_man(kline):
+                    print(f"检测到{symbol}的下垂线形态!")
+                    matching_symbols.append((symbol, kline))
+                else:
+                    print(f"{symbol}当前K线不是下垂线形态")
+            else:
+                print(f"未能获取{symbol}的有效K线数据")
     
-    print(f"获取到K线数据: {kline}")
-    
-    if is_hanging_man(kline):
-        print("检测到下垂线形态!")
-        message = f"检测到ETH-USDT 15分钟K线呈现下垂线形态\nK线数据: {kline}"
+    # 汇总通知
+    if matching_symbols:
+        message = "以下标的出现下垂线形态：\n"
+        for symbol, kline in matching_symbols:
+            message += f"{symbol}: {kline}\n"
         send_bark_notification(message)
     else:
-        print("当前K线不是下垂线形态")
+        print("没有检测到符合条件的下垂线形态")
 
 if __name__ == "__main__":
     main()
