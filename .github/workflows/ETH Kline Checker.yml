@@ -3,6 +3,7 @@ name: ETH Kline Checker
 on:
   schedule:
     - cron: '14,29,44,59 * * * *'
+  workflow_dispatch:
 
 jobs:
   check_kline:
