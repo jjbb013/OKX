@@ -1,9 +1,7 @@
 name: OKX K-Line Checker
 
 on:
-  # 每小时的14,29,44,59分钟触发
-  schedule:
-    - cron: '10,25,40,55 * * * *'
+  # 每小时的14,29,44,59
   # 允许手动触发
   workflow_dispatch:
 
