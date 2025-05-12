@@ -4,7 +4,7 @@ on:
   schedule:
     - cron: '14,29,44,59 * * * *'
   workflow_dispatch:
-
+  
 jobs:
   check_kline:
     runs-on: ubuntu-latest
@@ -19,7 +19,7 @@ jobs:
 
       - name: Check for Hanging Man and Send Notification
         run: |
-          # 直接获取从 API 返回的 K 线数据
+          # 使用从 API 获取的 K 线数据
           kline="${{ steps.get_kline.outputs.kline }}"
 
           # 从 JSON 数据中提取 K 线信息
@@ -37,3 +37,4 @@ jobs:
           if [[ $(echo "$body < 0" | bc -l) -eq 1 && $(echo "$range > 0" | bc -l) -eq 1 && $(echo "$high - $open < $body * 2" | bc -l) -eq 1 ]]; then
             curl -X POST "https://api.day.app/oZaeqGLJzRLSxW7dJqeACn/下垂线警报/当前K线为下垂线！?body=ETH-USDT-SWAP&sound=boop"
           fi
+
