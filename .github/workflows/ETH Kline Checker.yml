@@ -10,6 +10,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq bc
+
       - name: Get ETH-USDT-SWAP Kline Data
         id: get_kline
         run: |
@@ -37,4 +42,3 @@ jobs:
           if [[ $(echo "$body < 0" | bc -l) -eq 1 && $(echo "$range > 0" | bc -l) -eq 1 && $(echo "$high - $open < $body * 2" | bc -l) -eq 1 ]]; then
             curl -X POST "https://api.day.app/oZaeqGLJzRLSxW7dJqeACn/下垂线警报/当前K线为下垂线！?body=ETH-USDT-SWAP&sound=boop"
           fi
-
