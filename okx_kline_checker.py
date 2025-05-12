@@ -78,7 +78,7 @@ def is_hanging_man(kline):
     # 收盘价低于开盘价（绿色K线）
     is_bearish = close_price < open_price
     
-    return lower_shadow_ratio > 2.0 and upper_shadow_ratio < 0.5 and is_bearish
+    return lower_shadow_ratio > 2.0 and upper_shadow_ratio < 0.5
 
 def send_bark_notification(message):
     """通过Bark发送通知"""
