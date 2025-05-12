@@ -59,7 +59,7 @@ def is_hanging_man(kline):
     if body_size == 0:
         return False
     
-    # 下影线至少是实体的3倍
+    # 下影线至少是实体的2倍
     lower_shadow_ratio = lower_shadow / body_size
     # 上影线不超过实体的0.5倍
     upper_shadow_ratio = upper_shadow / body_size
@@ -67,7 +67,7 @@ def is_hanging_man(kline):
     # 收盘价低于开盘价（绿色K线）
     is_bearish = close_price < open_price
     
-    return lower_shadow_ratio > 3.0 and upper_shadow_ratio < 0.5 and is_bearish
+    return lower_shadow_ratio > 2.0 and upper_shadow_ratio < 0.5 and is_bearish
 
 def send_bark_notification(message):
     """通过Bark发送通知"""
