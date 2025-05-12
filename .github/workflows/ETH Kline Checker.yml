@@ -19,7 +19,7 @@ jobs:
 
       - name: Check for Hanging Man and Send Notification
         run: |
-          # 使用从 API 获取的 K 线数据
+          # 直接获取从 API 返回的 K 线数据
           kline="${{ steps.get_kline.outputs.kline }}"
 
           # 从 JSON 数据中提取 K 线信息
