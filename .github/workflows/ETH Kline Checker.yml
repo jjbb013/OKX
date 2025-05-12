@@ -1,44 +1,32 @@
-name: ETH Kline Checker
+name: OKX K-Line Checker
 
 on:
+  # 每小时的14,29,44,59分钟触发
   schedule:
     - cron: '14,29,44,59 * * * *'
+  # 允许手动触发
   workflow_dispatch:
-  
+
 jobs:
-  check_kline:
+  check-kline:
     runs-on: ubuntu-latest
-
+    env:
+      BARK_KEY: ${{ secrets.BARK_KEY }}
+    
     steps:
-      - name: Install Dependencies
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y jq bc
-
-      - name: Get ETH-USDT-SWAP Kline Data
-        id: get_kline
+          python -m pip install --upgrade pip
+          pip install requests pyjwt numpy pandas
+          
+      - name: Run K-Line Check
         run: |
-          response=$(curl -s 'https://www.okx.com/api/v5/market/candles?instId=ETH-USDT-SWAP&bar=15m&limit=1')
-          echo "Response: $response"
-          echo "::set-output name=kline::$response"
-
-      - name: Check for Hanging Man and Send Notification
-        run: |
-          # 使用从 API 获取的 K 线数据
-          kline="${{ steps.get_kline.outputs.kline }}"
-
-          # 从 JSON 数据中提取 K 线信息
-          kline_data=$(echo "$kline" | jq -r '.data[0]')
-          close=$(echo "$kline_data" | jq -r '.[4]')
-          open=$(echo "$kline_data" | jq -r '.[1]')
-          high=$(echo "$kline_data" | jq -r '.[3]')
-          low=$(echo "$kline_data" | jq -r '.[2]')
-
-          # 计算 body 和 range
-          body=$(echo "$close - $open" | bc -l)
-          range=$(echo "$high - $low" | bc -l)
-
-          # 检查是否为下垂线
-          if [[ $(echo "$body < 0" | bc -l) -eq 1 && $(echo "$range > 0" | bc -l) -eq 1 && $(echo "$high - $open < $body * 2" | bc -l) -eq 1 ]]; then
-            curl -X POST "https://api.day.app/oZaeqGLJzRLSxW7dJqeACn/下垂线警报/当前K线为下垂线！?body=ETH-USDT-SWAP&sound=boop"
-          fi
+          python okx_kline_checker.py
