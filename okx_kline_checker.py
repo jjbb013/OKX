@@ -9,7 +9,7 @@ BARK_KEY = os.getenv('BARK_KEY')
 # OKX API配置
 OKX_API_URL = "https://www.okx.com/api/v5/market/candles"
 INSTRUMENT_ID = "ETH-USDT-SWAP"
-CANDLE_INTERVAL = "15min"
+CANDLE_INTERVAL = "15m"
 
 def get_okx_kline():
     """获取OKX的最新15分钟K线数据"""
