@@ -20,8 +20,8 @@ SYMBOLS = {
     "vine-usdt-swap": {"symbol": "VINE-USDT-SWAP", "threshold": 5.0},
     "trump-usdt-swap": {"symbol": "TRUMP-USDT-SWAP", "threshold": 5.0},
     "eth-usdt-swap": {"symbol": "ETH-USDT-SWAP", "threshold": 1.0},
-    "ada-usdt-swap": {"symbol": "ADA-USDT-SWAP", "threshold": 1.0},
-    "doge-usdt-swap": {"symbol": "DOGE-USDT-SWAP", "threshold": 1.0},
+    "ada-usdt-swap": {"symbol": "ADA-USDT-SWAP", "threshold": 1.5},
+    "doge-usdt-swap": {"symbol": "DOGE-USDT-SWAP", "threshold": 1.5},
 }
 
 # Bark 推送配置
