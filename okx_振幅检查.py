@@ -1,3 +1,11 @@
+"""
+任务名称
+name: 振幅检查
+定时规则
+cron: 30,50 * * * * *
+"""
+
+
 import requests
 import logging
 from datetime import datetime
