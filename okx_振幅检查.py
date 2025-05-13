@@ -18,7 +18,7 @@ OKX_API_URL = "https://www.okx.com/api/v5/market/candles"
 SYMBOLS = {
     "btc-usdt-swap": {"symbol": "BTC-USDT-SWAP", "threshold": 1.0},
     "vine-usdt-swap": {"symbol": "VINE-USDT-SWAP", "threshold": 5.0},
-    "trump-usdt-swap": {"symbol": "TRUMP-USDT-SWAP", "threshold": 5.0},
+    "trump-usdt-swap": {"symbol": "TRUMP-USDT-SWAP", "threshold": 3.0},
     "eth-usdt-swap": {"symbol": "ETH-USDT-SWAP", "threshold": 1.0},
     "ada-usdt-swap": {"symbol": "ADA-USDT-SWAP", "threshold": 1.5},
     "doge-usdt-swap": {"symbol": "DOGE-USDT-SWAP", "threshold": 1.5},
