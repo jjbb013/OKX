@@ -141,7 +141,7 @@ def format_notification_message(matching_symbols):
     message = "以下标的出现下垂线形态：\n\n"
     for symbol, kline in matching_symbols:
         timestamp, open_price, high_price, low_price, close_price, volume = kline[:6]
-        formatted_time = datetime.fromtimestamp(timestamp / 1000).strftime('%Y-%m-%d %H:%M:%S')
+        formatted_time = datetime.fromtimestamp(int(timestamp) / 1000).strftime('%Y-%m-%d %H:%M:%S')
         message += f"🔹 {symbol}\n"
         message += f"   时间: {formatted_time}\n"
         message += f"   开盘价: {open_price}\n"
