@@ -35,11 +35,7 @@ CANDLE_INTERVAL = "15m"  # 15分钟K线
 # 需要检查的标的列表
 TARGET_SYMBOLS = [
     "ETH-USDT-SWAP",
-    "DOGE-USDT-SWAP",
-    "BTC-USDT-SWAP",
-    "VINE-USDT-SWAP",
-    "TRUMP-USDT-SWAP",
-    "ADA-USDT-SWAP"
+    "BTC-USDT-SWAP"
 ]
 
 
