@@ -24,17 +24,40 @@ logging.basicConfig(
 # OKX API 配置
 OKX_API_URL = "https://www.okx.com/api/v5/market/candles"
 SYMBOLS = {
-    "btc-usdt-swap": {"symbol": "BTC-USDT-SWAP", "threshold": 1.0},
-    "vine-usdt-swap": {"symbol": "VINE-USDT-SWAP", "threshold": 5.0},
-    "trump-usdt-swap": {"symbol": "TRUMP-USDT-SWAP", "threshold": 3.0},
-    "eth-usdt-swap": {"symbol": "ETH-USDT-SWAP", "threshold": 1.0},
-    "ada-usdt-swap": {"symbol": "ADA-USDT-SWAP", "threshold": 1.5},
-    "doge-usdt-swap": {"symbol": "DOGE-USDT-SWAP", "threshold": 1.5},
+    "btc-usdt-swap": {
+        "symbol": "BTC-USDT-SWAP",
+        "upper_threshold": 1.0,
+        "lower_threshold": -1.0
+    },
+    "vine-usdt-swap": {
+        "symbol": "VINE-USDT-SWAP",
+        "upper_threshold": 5.0,
+        "lower_threshold": -5.0
+    },
+    "trump-usdt-swap": {
+        "symbol": "TRUMP-USDT-SWAP",
+        "upper_threshold": 3.0,
+        "lower_threshold": -3.0
+    },
+    "eth-usdt-swap": {
+        "symbol": "ETH-USDT-SWAP",
+        "upper_threshold": 1.0,
+        "lower_threshold": -1.0
+    },
+    "ada-usdt-swap": {
+        "symbol": "ADA-USDT-SWAP",
+        "upper_threshold": 1.5,
+        "lower_threshold": -1.5
+    },
+    "doge-usdt-swap": {
+        "symbol": "DOGE-USDT-SWAP",
+        "upper_threshold": 1.5,
+        "lower_threshold": -1.5
+    },
 }
 
 # Bark 推送配置
 BARK_API_KEY = 'oZaeqGLJzRLSxW7dJqeACn'  # 替换为你的 Bark API Key
-BARK_PUSH_URL = f"https://api.day.app/{BARK_API_KEY}/{{}}"
 
 def get_kline(symbol, interval="1m", limit=1):
     """获取OKX的最新1根K线数据"""
@@ -114,7 +137,8 @@ def send_bark_notification(title, content):
 def monitor_single_symbol(symbol_key, config):
     """监控单个标的的振幅"""
     symbol_name = config["symbol"]
-    threshold = config["threshold"]
+    upper_threshold = config["upper_threshold"]
+    lower_threshold = config["lower_threshold"]
 
     logging.info(f"正在检查 {symbol_name}...")
     kline = get_kline(symbol_name)
@@ -131,17 +155,19 @@ def monitor_single_symbol(symbol_key, config):
 
     logging.info(f"{symbol_name} 当前振幅: {amplitude}%")
 
-    if abs(amplitude) > threshold:  # 使用绝对值判断
+    # 判断振幅是否超过阈值（正负两个方向）
+    if amplitude > upper_threshold or amplitude < lower_threshold:
         title = f"⚠️ {symbol_name} 振幅预警"
         content = (
-            f"当前振幅: {amplitude}% (阈值: {threshold}%)\n"
+            f"当前振幅: {amplitude}%\n"
+            f"阈值: {upper_threshold}%\n"
             f"时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
             f"开盘价: {kline[1]}\n"
             f"最新价: {kline[4]}"
         )
         send_bark_notification(title, content)
     else:
-        logging.info(f"{symbol_name} 振幅未超过阈值 ({amplitude}% <= {threshold}%)")
+        logging.info(f"{symbol_name} 振幅未超过阈值 ({amplitude}% <= {upper_threshold}% and {amplitude}% >= {lower_threshold}%)")
 
 def monitor_amplitude():
     """监控K线振幅并发送通知"""
