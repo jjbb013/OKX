@@ -36,8 +36,8 @@ SYMBOLS = {
 BARK_API_KEY = 'oZaeqGLJzRLSxW7dJqeACn'  # 替换为你的 Bark API Key
 BARK_PUSH_URL = f"https://api.day.app/{BARK_API_KEY}/{{}}"
 
-def get_kline(symbol, interval="1m", limit=2):
-    """获取OKX的K线数据"""
+def get_kline(symbol, interval="1m", limit=1):
+    """获取OKX的最新1根K线数据"""
     params = {
         "instId": symbol,
         "bar": interval,
@@ -52,35 +52,40 @@ def get_kline(symbol, interval="1m", limit=2):
             logging.warning(f"获取 {symbol} K 线失败: {data['msg']}")
             return None
 
-        klines = []
-        for candle in data["data"]:
-            try:
-                klines.append([
-                    int(candle[0]),  # 时间戳
-                    float(candle[1]),  # 开盘价
-                    float(candle[2]),  # 最高价
-                    float(candle[3]),  # 最低价
-                    float(candle[4]),  # 收盘价
-                    float(candle[5]),  # 成交量
-                ])
-            except (IndexError, ValueError) as e:
-                logging.error(f"解析 K 线数据错误: {e}, 数据: {candle}")
-                continue
-        return klines
+        if not data["data"]:
+            logging.warning(f"{symbol} 未获取到 K 线数据")
+            return None
+
+        try:
+            kline = data["data"][0]
+            return [
+                int(kline[0]),  # 时间戳
+                float(kline[1]),  # 开盘价
+                float(kline[2]),  # 最高价
+                float(kline[3]),  # 最低价
+                float(kline[4]),  # 收盘价
+                float(kline[5]),  # 成交量
+            ]
+        except (IndexError, ValueError) as e:
+            logging.error(f"解析 K 线数据错误: {e}, 数据: {kline}")
+            return None
 
     except requests.exceptions.RequestException as e:
         logging.error(f"请求 OKX API 失败: {e}")
         return None
 
 def calculate_amplitude(kline):
-    """计算K线振幅"""
-    if not kline or len(kline) < 4:
+    """基于开盘价计算振幅"""
+    if not kline:
         return None
-    high = kline[2]  # 最高价
-    low = kline[3]   # 最低价
-    if low == 0:  # 避免除零错误
+    open_price = kline[1]  # 开盘价
+    latest_price = kline[4]  # 最新价（收盘价）
+    
+    if open_price == 0:  # 避免除零错误
         return None
-    amplitude = (high - low) / low * 100
+    
+    # 新的振幅计算逻辑：基于开盘价和最新价的波动比例
+    amplitude = ((latest_price - open_price) / open_price) * 100
     return round(amplitude, 2)
 
 def send_bark_notification(title, content):
@@ -112,14 +117,13 @@ def monitor_single_symbol(symbol_key, config):
     threshold = config["threshold"]
 
     logging.info(f"正在检查 {symbol_name}...")
-    klines = get_kline(symbol_name)
+    kline = get_kline(symbol_name)
 
-    if not klines or len(klines) < 1:
+    if not kline:
         logging.warning(f"{symbol_name} 未获取到有效 K 线数据")
         return
 
-    latest_kline = klines[-1]
-    amplitude = calculate_amplitude(latest_kline)
+    amplitude = calculate_amplitude(kline)
 
     if amplitude is None:
         logging.warning(f"{symbol_name} 振幅计算失败")
@@ -127,14 +131,13 @@ def monitor_single_symbol(symbol_key, config):
 
     logging.info(f"{symbol_name} 当前振幅: {amplitude}%")
 
-    if amplitude > threshold:
+    if abs(amplitude) > threshold:  # 使用绝对值判断
         title = f"⚠️ {symbol_name} 振幅预警"
         content = (
             f"当前振幅: {amplitude}% (阈值: {threshold}%)\n"
             f"时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
-            f"最新价: {latest_kline[4]}\n"
-            f"最高价: {latest_kline[2]}\n"
-            f"最低价: {latest_kline[3]}"
+            f"开盘价: {kline[1]}\n"
+            f"最新价: {kline[4]}"
         )
         send_bark_notification(title, content)
     else:
