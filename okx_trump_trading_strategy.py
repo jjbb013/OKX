@@ -1,4 +1,9 @@
-# trading_strategy.py
+"""
+任务名称
+name: OKX TRUMP 自动交易
+定时规则
+cron: 55 * * * * *
+"""
 import os
 import pandas as pd
 import requests
