@@ -130,4 +130,4 @@ if __name__ == "__main__":
         print(f"[{get_beijing_time()}] [ORDER] {json.dumps(order_params)}")
         print(f"[{get_beijing_time()}] [RESULT] {json.dumps(order_result)}")
     else:
-        print(f"[{get_beijing_time()}] [INFO] 未检测到交易信号-振幅：{df['changePerc']}")
+        print(f"[{get_beijing_time()}] [INFO] 未检测到交易信号-振幅：{df['changePerc'].tolist()}")
