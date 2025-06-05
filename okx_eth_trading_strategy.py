@@ -120,8 +120,8 @@ if __name__ == "__main__":
             f"信号类型: {signal}\n"
             f"入场价格: {entry_price}\n"
             f"委托数量: {size}\n"
-            f"止盈价: {round(entry_price*1.02,4)}\n"
-            f"止损价: {round(entry_price*0.986,4)}"
+            f"止盈价: {round(entry_price*1.015,4)}\n"
+            f"止损价: {round(entry_price*0.981,4)}"
         )
         send_bark_notification(title, message)
         
