@@ -105,9 +105,9 @@ if __name__ == "__main__":
             "px": str(entry_price),
             "sz": str(size),
             "posSide": "long" if signal == "LONG" else "short",
-            "tpTriggerPx": str(round(entry_price * 1.02, 6)),
+            "tpTriggerPx": str(round(entry_price * 1.014, 6)),
             "tpOrdPx": "-1",
-            "slTriggerPx": str(round(entry_price * 0.986, 6)),
+            "slTriggerPx": str(round(entry_price * 0.9825, 6)),
             "slOrdPx": "-1"
         }
         
@@ -120,8 +120,8 @@ if __name__ == "__main__":
             f"信号类型: {signal}\n"
             f"入场价格: {entry_price}\n"
             f"委托数量: {size}\n"
-            f"止盈价: {round(entry_price*1.02,4)}\n"
-            f"止损价: {round(entry_price*0.986,4)}"
+            f"止盈价: {round(entry_price*1.014,4)}\n"
+            f"止损价: {round(entry_price*0.9825,4)}"
         )
         send_bark_notification(title, message)
         
