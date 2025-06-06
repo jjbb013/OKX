@@ -2,7 +2,7 @@
 任务名称
 name: OKX Vine 自动交易 PROD
 定时规则
-cron: 0 */5 * * * *
+cron: 0 * * * * *
 """
 import os
 import pandas as pd
