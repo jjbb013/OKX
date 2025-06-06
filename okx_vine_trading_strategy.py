@@ -19,8 +19,8 @@ import okx.Trade as Trade
 INST_ID = "VINE-USDT-SWAP"  # 交易标的
 BAR = "1m"  # K线规格
 LIMIT = 2  # 获取K线数量
-LEVERAGE = 10  #杠杆倍数，仅用于委托数量计算，杠杆设置需要使用其他脚本
-SizePoint = 0  #下单数量的小数点保留位数，模拟盘建议2，实盘建议4
+LEVERAGE = 10  #杠杆倍数，仅用于展示，这个参数在这里没有实际作用，杠杆设置需要使用其他脚本
+Size = 1400  #下单数量，需要根据杠杆和币种进行调整，VINE 10倍杠杆 1400的数量大约相当于5 USDT左右
 
 # 振幅阈值参数
 RANGE1_MIN = 1.0  # 振幅范围1最小值(%)
@@ -205,7 +205,7 @@ if __name__ == "__main__":
     # 如果有交易信号
     if signal:
         # 计算合约数量
-        size = round((MARGIN * LEVERAGE) / entry_price, SizePoint)
+        size = Size
 
         # 根据信号方向计算止盈止损价格
         if signal == "LONG":
