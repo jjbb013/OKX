@@ -23,14 +23,14 @@ LEVERAGE = 10  #杠杆倍数，仅用于展示，这个参数在这里没有实�
 Size = 1400  #下单数量，需要根据杠杆和币种进行调整，VINE 10倍杠杆 1400的数量大约相当于5 USDT左右
 
 # 振幅阈值参数
-RANGE1_MIN = 1.0  # 振幅范围1最小值(%)
-RANGE1_MAX = 1.8  # 振幅范围1最大值(%)
-RANGE2_THRESHOLD = 2.4  # 振幅范围2阈值(%)
+RANGE1_MIN = 0.8  # 振幅范围1最小值(%) 历史数据：1.0
+RANGE1_MAX = 2.7  # 振幅范围1最大值(%) 历史数据：1.8
+RANGE2_THRESHOLD = 2.6  # 振幅范围2阈值(%) 历史数据：2.4
 
 # 交易执行参数
 MARGIN = 5  # 保证金(USDT)
-TAKE_PROFIT_PERCENT = 0.014  # 止盈比例(1.5%)
-STOP_LOSS_PERCENT = 0.0175  # 止损比例(1.9%)
+TAKE_PROFIT_PERCENT = 0.025  # 止盈比例(1.5%)历史数据：0.014
+STOP_LOSS_PERCENT = 0.03  # 止损比例(1.9%)历史数据：0.0175
 
 # 从环境变量获取账户信息
 API_KEY = os.getenv("OKX_API_KEY")
