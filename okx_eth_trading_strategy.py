@@ -140,7 +140,7 @@ def cancel_pending_open_orders(trade_api):
     
     if not cancel_orders:
         print(f"[{get_beijing_time()}] [CANCEL] 无需要撤销的开仓订单")
-        return
+        return False  # 返回是否有订单被撤销
     
     try:
         # 准备批量撤销请求
@@ -164,6 +164,7 @@ def cancel_pending_open_orders(trade_api):
             
             if failed_orders:
                 print(f"[{get_beijing_time()}] [CANCEL] 部分订单撤销失败: {json.dumps(failed_orders)}")
+                return False
             else:
                 print(f"[{get_beijing_time()}] [CANCEL] 所有{len(cancel_orders)}个订单撤销成功")
                 
@@ -175,11 +176,14 @@ def cancel_pending_open_orders(trade_api):
                     f"首个订单ID: {first_order['ordId']}\n"
                     f"标的: {INST_ID}"
                 )
+                return True
         else:
             error_msg = result.get('msg', '') if result else '无响应'
             print(f"[{get_beijing_time()}] [CANCEL] 批量撤销失败: {error_msg}")
+            return False
     except Exception as e:
         print(f"[{get_beijing_time()}] [CANCEL] 撤销订单异常: {str(e)}")
+        return False
 
 
 def analyze_kline(kline):
@@ -262,9 +266,6 @@ if __name__ == "__main__":
     trade_api = Trade.TradeAPI(API_KEY, SECRET_KEY, PASSPHRASE, False, FLAG)
     market_api.OK_ACCESS_TIMESTAMP = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%fZ")
     
-    # 1. 检查并撤销开仓订单
-    cancel_pending_open_orders(trade_api)
-
     # 获取最近K线数据
     result = market_api.get_candlesticks(instId=INST_ID, bar=BAR, limit=str(LIMIT))
 
@@ -311,7 +312,11 @@ if __name__ == "__main__":
 
     # 如果有交易信号
     if signal:
-        # 计算合约数量
+        # 1. 撤销现有的开仓订单
+        print(f"[{get_beijing_time()}] [ORDER] 检测到信号，先撤销现有开仓订单")
+        canceled = cancel_pending_open_orders(trade_api)
+        
+        # 2. 计算合约数量
         size = round((MARGIN * LEVERAGE) / entry_price, SizePoint)
 
         # 根据信号方向计算止盈止损价格
@@ -356,9 +361,17 @@ if __name__ == "__main__":
         try:
             order_result = trade_api.place_order(**order_params)
             print(f"[{get_beijing_time()}] [ORDER] 订单提交结果: {json.dumps(order_result)}")
+            
+            # 检查是否成功下单
+            if order_result and 'code' in order_result and order_result['code'] == '0':
+                success = True
+            else:
+                success = False
+                error_msg = order_result.get('msg', '') if order_result else '下单失败，无响应'
         except Exception as e:
             print(f"[{get_beijing_time()}] [ORDER] 下单异常: {str(e)}")
-            order_result = {}
+            success = False
+            error_msg = str(e)
 
         # 发送交易通知
         title = f"交易信号: {signal} @ {INST_ID}"
@@ -370,6 +383,11 @@ if __name__ == "__main__":
             f"止盈价: {take_profit_price:.4f} ({TAKE_PROFIT_PERCENT * 100:.2f}%)\n"
             f"止损价: {stop_loss_price:.4f} ({STOP_LOSS_PERCENT * 100:.2f}%)"
         )
+        
+        # 如果下单失败，添加错误信息
+        if not success:
+            message += f"\n\n⚠️ 下单失败 ⚠️\n错误: {error_msg}"
+        
         send_bark_notification(title, message)
 
         # 日志输出
