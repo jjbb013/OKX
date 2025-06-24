@@ -79,16 +79,9 @@ def send_bark_notification(title, message):
 
 def get_orders_pending(trade_api):
     """获取当前账户下所有未成交订单信息"""
-    endpoint = "/api/v5/trade/orders-pending"
-    params = {
-        "instId": INST_ID,
-        "state": "live,partially_filled",  # 获取未成交和部分成交订单
-        "limit": "100"  # 获取最多100条记录
-    }
-    
     try:
         # 使用Trade API的内部请求方法
-        result = trade_api._request('GET', endpoint, params=params)
+        result = trade_api.get_order_list(instId=INST_ID)
         
         if result and 'code' in result and result['code'] == '0' and 'data' in result:
             print(f"[{get_beijing_time()}] [ORDERS] 成功获取{len(result['data'])}个未成交订单")
@@ -317,7 +310,7 @@ if __name__ == "__main__":
         canceled = cancel_pending_open_orders(trade_api)
         
         # 2. 计算合约数量
-        size = round((MARGIN * LEVERAGE) / entry_price, SizePoint)
+        size = round((MARGIN * LEVERAGE * 10 ) / entry_price, SizePoint) # 乘以10是标准倍数，如果不乘保证金会小十倍。
 
         # 根据信号方向计算止盈止损价格
         if signal == "LONG":
