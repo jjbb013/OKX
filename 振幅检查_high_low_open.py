@@ -31,28 +31,28 @@ SYMBOLS = {
     },
     "vine-usdt-swap": {
         "symbol": "VINE-USDT-SWAP",
-        "upper_threshold": 1.0,
-        "lower_threshold": -1.0
+        "upper_threshold": 3.0,
+        "lower_threshold": -3.0
     },
     "trump-usdt-swap": {
         "symbol": "TRUMP-USDT-SWAP",
-        "upper_threshold": 1.0,
-        "lower_threshold": -1.0
+        "upper_threshold": 3.0,
+        "lower_threshold": -3.0
     },
     "eth-usdt-swap": {
         "symbol": "ETH-USDT-SWAP",
-        "upper_threshold": 1.0,
-        "lower_threshold": -1.0
+        "upper_threshold": 2.0,
+        "lower_threshold": -2.0
     },
     "ada-usdt-swap": {
         "symbol": "ADA-USDT-SWAP",
-        "upper_threshold": 1.0,
-        "lower_threshold": -1.0
+        "upper_threshold": 3.0,
+        "lower_threshold": -3.0
     },
     "doge-usdt-swap": {
         "symbol": "DOGE-USDT-SWAP",
-        "upper_threshold": 1.0,
-        "lower_threshold": -1.0
+        "upper_threshold": 3.0,
+        "lower_threshold": -3.0
     },
 }
 
