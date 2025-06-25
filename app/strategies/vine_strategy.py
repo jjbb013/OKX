@@ -2,6 +2,8 @@ import os
 import pandas as pd
 import requests
 import json
+import random
+import string
 from datetime import datetime, timezone, timedelta
 import okx.MarketData as MarketData
 import okx.Trade as Trade
