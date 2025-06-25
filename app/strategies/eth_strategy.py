@@ -3,8 +3,8 @@ import pandas as pd
 import requests
 import json
 from datetime import datetime, timezone, timedelta
-import okx.MarketData as MarketData
-import okx.Trade as Trade
+from okx import MarketData
+from okx import Trade
 
 class ETHStrategy:
     def __init__(self):
