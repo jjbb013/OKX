@@ -2,9 +2,11 @@ import os
 import pandas as pd
 import requests
 import json
+import random
+import string
 from datetime import datetime, timezone, timedelta
-from okx import MarketData
-from okx import Trade
+import okx.MarketData as MarketData
+import okx.Trade as Trade
 
 class ETHStrategy:
     def __init__(self):
