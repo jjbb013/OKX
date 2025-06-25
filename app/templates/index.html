@@ -10,6 +10,24 @@
 <body class="bg-gray-100">
     <div class="container mx-auto px-4 py-8">
         <h1 class="text-3xl font-bold text-gray-800 mb-8">OKX Trading Dashboard</h1>
+
+        <!-- 最近运行状态 -->
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
+            <h2 class="text-xl font-semibold text-gray-700 mb-4">最近运行状态</h2>
+            {% if runs %}
+            <ul class="list-disc pl-5">
+                {% for run in runs %}
+                <li class="mb-2">
+                    <p class="text-gray-600">时间: {{ run.timestamp }}</p>
+                    <p class="text-gray-600">ETH 策略状态: {{ run.eth_status }}</p>
+                    <p class="text-gray-600">Vine 策略状态: {{ run.vine_status }}</p>
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p class="text-gray-600">暂无运行状态记录。</p>
+            {% endif %}
+        </div>
         
         <!-- 策略卡片容器 -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">

@@ -11,15 +11,20 @@ import okx.Trade as Trade
 class VineStrategy:
     def __init__(self):
         # 交易标的参数
-        self.INST_ID = "VINE-USDT-SWAP"
+        self.INST_ID = "TRUMP-USDT-SWAP"
         self.BAR = "5m"
         self.LIMIT = 2
         self.LEVERAGE = 10
-        self.SizePoint = 0
+        self.SizePoint = 2
 
         # 振幅阈值参数
-        self.RANGE1_MIN = 1.0
-        self.RANGE1_MAX = 1.5
+        self.RANGE1_MIN = 0.8
+        self.RANGE1_MAX = 1.8
+
+    def run(self):
+        # 模拟策略运行，返回一个状态字符串
+        # 实际应用中，这里会包含复杂的交易逻辑
+        return "Vine Strategy Run Successfully"
         self.RANGE2_THRESHOLD = 2
 
         # 交易执行参数

@@ -1,33 +1,28 @@
-from fastapi import FastAPI, Request, Form, HTTPException
-from fastapi.templating import Jinja2Templates
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import JSONResponse
+from fastapi.templating import Jinja2Templates
+import redis
 import os
-from datetime import datetime, timezone, timedelta
 import json
-from typing import Optional
-import pandas as pd
 
 app = FastAPI(title="OKX Trading Dashboard")
 
+# 从环境变量获取 Redis URL
+REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
+r = redis.from_url(REDIS_URL)
+
 # 挂载静态文件和模板
-app.mount("/static", StaticFiles(directory="/var/task/app/static"), name="static")
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 
-# 导入交易策略模块
-from app.strategies.eth_strategy import ETHStrategy
-from app.strategies.vine_strategy import VineStrategy
-
-# 创建策略实例
-eth_strategy = ETHStrategy()
-vine_strategy = VineStrategy()
-
-@app.get("/")
+@app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
-    """主页面"""
+    # 从 Redis 获取最近3次运行状态
+    raw_runs = r.lrange('strategy_runs', 0, 2)
+    runs = [json.loads(run) for run in raw_runs]
     return templates.TemplateResponse(
-        "index.html",
-        {"request": request}
+        "index.html", {"request": request, "runs": runs}
     )
 
 @app.get("/api/status")

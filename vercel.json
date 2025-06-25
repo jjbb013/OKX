@@ -2,8 +2,9 @@
     "version": 2,
     "builds": [
         {
-            "src": "app/main.py",
-            "use": "@vercel/python"
+            "src": "api/index.py",
+            "use": "@vercel/python",
+            "config": { "maxLambdaSize": "15mb", "runtime": "python3.9" }
         },
         {
             "src": "app/static/**",
@@ -17,10 +18,16 @@
         },
         {
             "src": "/(.*)",
-            "dest": "app/main.py"
+            "dest": "api/index.py"
         }
     ],
     "env": {
         "PYTHONPATH": "."
-    }
+    },
+    "crons": [
+        {
+            "path": "/api/cron_job.py",
+            "schedule": "0/5 * * * *"
+        }
+    ]
 }

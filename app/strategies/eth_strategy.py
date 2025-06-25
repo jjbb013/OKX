@@ -20,6 +20,11 @@ class ETHStrategy:
         # 振幅阈值参数
         self.RANGE1_MIN = 0.8
         self.RANGE1_MAX = 1.8
+
+    def run(self):
+        # 模拟策略运行，返回一个状态字符串
+        # 实际应用中，这里会包含复杂的交易逻辑
+        return "ETH Strategy Run Successfully"
         self.RANGE2_THRESHOLD = 2
 
         # 交易执行参数
