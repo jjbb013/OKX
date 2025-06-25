@@ -21,6 +21,7 @@ BAR = "5m"  # K线规格
 LIMIT = 2  # 获取K线数量
 LEVERAGE = 10  # 杠杆倍数
 SizePoint = 0  # 下单数量的小数点保留位数
+CONTRACT_FACE_VALUE = 10  # VINE-USDT-SWAP合约面值为10美元
 
 # 振幅阈值参数
 RANGE1_MIN = 1.0  # 振幅范围1最小值(1%)
@@ -28,7 +29,7 @@ RANGE1_MAX = 1.5  # 振幅范围1最大值(1.5%)
 RANGE2_THRESHOLD = 2  # 振幅范围2阈值(2%)
 
 # 交易执行参数
-MARGIN = 5  # 保证金(USDT)
+MARGIN = 10  # 保证金(USDT)
 TAKE_PROFIT_PERCENT = 0.015  # 止盈比例改为1.5%
 STOP_LOSS_PERCENT = 0.03  # 止损比例(3%)
 
@@ -309,8 +310,44 @@ if __name__ == "__main__":
         print(f"[{get_beijing_time()}] [ORDER] 检测到信号，先撤销现有开仓订单")
         canceled = cancel_pending_open_orders(trade_api)
         
-        # 2. 计算合约数量
-        size = round((MARGIN * LEVERAGE ) / entry_price, SizePoint) 
+        # 2. 计算合约数量（考虑合约面值）
+        raw_size = (MARGIN * LEVERAGE) / (CONTRACT_FACE_VALUE * entry_price)
+        size_rounded = round(raw_size, SizePoint)
+        
+        # 确保数量为10的整数倍
+        if raw_size >= 1:
+            # 向下取整到最近的10的倍数
+            size = int(size_rounded // 10) * 10
+            
+            # 特殊处理：如果四舍五入后的值接近10的倍数但向下取整后为0
+            if size == 0 and size_rounded >= 5:  # 如果大于等于5但小于10，使用最小交易量10
+                size = 10
+                print(f"[{get_beijing_time()}] [SIZE_ADJUST] 数量过小但≥5，调整为最小交易量10")
+        else:
+            size = 0
+            print(f"[{get_beijing_time()}] [ERROR] 计算数量过小: {size_rounded}，无法交易")
+        
+        # 检查最终数量是否有效
+        if size == 0:
+            print(f"[{get_beijing_time()}] [ERROR] 最终数量为0，放弃交易")
+            
+            # 发送失败通知
+            send_bark_notification(
+                "交易失败",
+                f"计算数量为0，放弃交易\n"
+                f"原始计算值: {raw_size:.4f}\n"
+                f"四舍五入后: {size_rounded}\n"
+                f"标的: {INST_ID}\n"
+                f"入场价: {entry_price:.4f}\n"
+                f"保证金: {MARGIN} USDT"
+            )
+            # 直接退出，不进行后续交易
+            exit(1)
+        
+        print(f"[{get_beijing_time()}] [SIZE_CALC] 计算详情:")
+        print(f"  原始数量: {raw_size:.4f}")
+        print(f"  四舍五入后: {size_rounded}")
+        print(f"  调整后数量: {size} (10的倍数)")
 
         # 根据信号方向计算止盈止损价格
         if signal == "LONG":
@@ -373,6 +410,8 @@ if __name__ == "__main__":
             f"入场价格: {entry_price:.4f}\n"
             f"委托数量: {size}\n"
             f"保证金: {MARGIN} USDT\n"
+            f"杠杆: {LEVERAGE}倍\n"
+            f"合约面值: {CONTRACT_FACE_VALUE}\n"
             f"止盈价: {take_profit_price:.4f} ({TAKE_PROFIT_PERCENT * 100:.2f}%)\n"
             f"止损价: {stop_loss_price:.4f} ({STOP_LOSS_PERCENT * 100:.2f}%)"
         )
