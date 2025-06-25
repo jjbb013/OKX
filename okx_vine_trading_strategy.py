@@ -29,15 +29,12 @@ RANGE1_MAX = 1.5  # 振幅范围1最大值(1.5%)
 RANGE2_THRESHOLD = 2  # 振幅范围2阈值(2%)
 
 # 交易执行参数
-MARGIN = 10  # 保证金(USDT)
+MARGIN = 5  # 保证金(USDT)
 TAKE_PROFIT_PERCENT = 0.015  # 止盈比例改为1.5%
 STOP_LOSS_PERCENT = 0.03  # 止损比例(3%)
 
-# 从环境变量获取账户信息
-API_KEY = os.getenv("OKX_API_KEY")
-SECRET_KEY = os.getenv("OKX_SECRET_KEY")
-PASSPHRASE = os.getenv("OKX_PASSPHRASE")
-FLAG = os.getenv("OKX_FLAG", "0")  # 默认实盘
+# 环境变量账户后缀，支持多账号 (如OKX_API_KEY1, OKX_SECRET_KEY1, OKX_PASSPHRASE1)
+ACCOUNT_SUFFIXES = ["", "1", "2", "3"]  # 空字符串代表无后缀的默认账号
 
 # Bark通知配置
 BARK_KEY = os.getenv("BARK_KEY")
@@ -161,15 +158,6 @@ def cancel_pending_open_orders(trade_api):
                 return False
             else:
                 print(f"[{get_beijing_time()}] [CANCEL] 所有{len(cancel_orders)}个订单撤销成功")
-                
-                # 发送通知
-                first_order = cancel_orders[0]
-                send_bark_notification(
-                    "开仓订单撤销",
-                    f"已撤销{len(cancel_orders)}个未成交开仓订单\n"
-                    f"首个订单ID: {first_order['ordId']}\n"
-                    f"标的: {INST_ID}"
-                )
                 return True
         else:
             error_msg = result.get('msg', '') if result else '无响应'
@@ -249,23 +237,182 @@ def generate_clord_id():
     return f"{PREFIX}{timestamp}{random_str}"[:32]
 
 
-if __name__ == "__main__":
-    # 验证账户信息
-    if not all([API_KEY, SECRET_KEY, PASSPHRASE]):
-        print(f"[{get_beijing_time()}] [ERROR] 缺少OKX账户信息")
-        exit(1)
-
+def process_account_trading(account_index, signal, entry_price, amp_info):
+    """处理单个账户的交易操作"""
+    # 从环境变量获取账户信息
+    suffix = account_index if account_index else ""  # 空后缀对应默认账户
+    prefix = "[ACCOUNT-" + suffix + "]" if suffix else "[ACCOUNT]"
+    
+    api_key = os.getenv(f"OKX_API_KEY{suffix}")
+    secret_key = os.getenv(f"OKX_SECRET_KEY{suffix}")
+    passphrase = os.getenv(f"OKX_PASSPHRASE{suffix}")
+    flag = os.getenv(f"OKX_FLAG{suffix}", "0")  # 默认实盘
+    
+    if not all([api_key, secret_key, passphrase]):
+        print(f"[{get_beijing_time()}] {prefix} [ERROR] 账户信息不完整或未配置")
+        return
+    
     # 初始化API
-    market_api = MarketData.MarketAPI(API_KEY, SECRET_KEY, PASSPHRASE, False, FLAG)
-    trade_api = Trade.TradeAPI(API_KEY, SECRET_KEY, PASSPHRASE, False, FLAG)
-    market_api.OK_ACCESS_TIMESTAMP = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+    try:
+        trade_api = Trade.TradeAPI(api_key, secret_key, passphrase, False, flag)
+        print(f"[{get_beijing_time()}] {prefix} API初始化成功")
+    except Exception as e:
+        print(f"[{get_beijing_time()}] {prefix} [ERROR] API初始化失败: {str(e)}")
+        return
+    
+    # 1. 撤销现有的开仓订单
+    print(f"[{get_beijing_time()}] {prefix} [ORDER] 正在撤销现有开仓订单")
+    canceled = cancel_pending_open_orders(trade_api)
+    
+    # 2. 计算合约数量（考虑合约面值）
+    raw_size = (MARGIN * LEVERAGE) / (CONTRACT_FACE_VALUE * entry_price)
+    size_rounded = round(raw_size, SizePoint)
+    
+    # 确保数量为10的整数倍
+    if raw_size >= 1:
+        # 向下取整到最近的10的倍数
+        size = int(size_rounded // 10) * 10
+        
+        # 特殊处理：如果四舍五入后的值接近10的倍数但向下取整后为0
+        if size == 0 and size_rounded >= 5:  # 如果大于等于5但小于10，使用最小交易量10
+            size = 10
+            print(f"[{get_beijing_time()}] {prefix} [SIZE_ADJUST] 数量过小但≥5，调整为最小交易量10")
+    else:
+        size = 0
+        print(f"[{get_beijing_time()}] {prefix} [ERROR] 计算数量过小: {size_rounded}，无法交易")
+    
+    # 检查最终数量是否有效
+    if size == 0:
+        print(f"[{get_beijing_time()}] {prefix} [ERROR] 最终数量为0，放弃交易")
+        
+        # 发送失败通知
+        send_bark_notification(
+            f"{prefix} 交易失败",
+            f"计算数量为0，放弃交易\n"
+            f"账户: {suffix}\n"
+            f"原始计算值: {raw_size:.4f}\n"
+            f"四舍五入后: {size_rounded}\n"
+            f"标的: {INST_ID}\n"
+            f"入场价: {entry_price:.4f}\n"
+            f"保证金: {MARGIN} USDT"
+        )
+        return
+    
+    print(f"[{get_beijing_time()}] {prefix} [SIZE_CALC] 计算详情:")
+    print(f"  原始数量: {raw_size:.4f}")
+    print(f"  四舍五入后: {size_rounded}")
+    print(f"  调整后数量: {size} (10的倍数)")
+
+    # 根据信号方向计算止盈止损价格
+    if signal == "LONG":
+        take_profit_price = round(entry_price * (1 + TAKE_PROFIT_PERCENT), 5)
+        stop_loss_price = round(entry_price * (1 - STOP_LOSS_PERCENT), 5)
+    else:  # SHORT
+        take_profit_price = round(entry_price * (1 - TAKE_PROFIT_PERCENT), 5)
+        stop_loss_price = round(entry_price * (1 + STOP_LOSS_PERCENT), 5)
+
+    # 生成符合要求的clOrdId
+    cl_ord_id = generate_clord_id()
+
+    # 构建止盈止损对象列表
+    attach_algo_ord = {
+        "attachAlgoClOrdId": generate_clord_id(),
+        "tpTriggerPx": str(take_profit_price),
+        "tpOrdPx": "-1",  # 市价止盈
+        "tpOrdKind": "condition",
+        "slTriggerPx": str(stop_loss_price),
+        "slOrdPx": "-1",  # 市价止损
+        "tpTriggerPxType": "last",
+        "slTriggerPxType": "last"
+    }
+
+    # 重构交易参数
+    order_params = {
+        "instId": INST_ID,
+        "tdMode": "cross",
+        "side": "buy" if signal == "LONG" else "sell",
+        "ordType": "limit",
+        "px": str(entry_price),
+        "sz": str(size),
+        "clOrdId": cl_ord_id,
+        "posSide": "long" if signal == "LONG" else "short",
+        "attachAlgoOrds": [attach_algo_ord]
+    }
+
+    print(f"[{get_beijing_time()}] {prefix} [ORDER] 准备下单参数: {json.dumps(order_params, indent=2)}")
+
+    # 发送订单
+    try:
+        order_result = trade_api.place_order(**order_params)
+        print(f"[{get_beijing_time()}] {prefix} [ORDER] 订单提交结果: {json.dumps(order_result)}")
+        
+        # 检查是否成功下单
+        if order_result and 'code' in order_result and order_result['code'] == '0':
+            success = True
+            error_msg = ""
+        else:
+            success = False
+            error_msg = order_result.get('msg', '') if order_result else '下单失败，无响应'
+    except Exception as e:
+        print(f"[{get_beijing_time()}] {prefix} [ORDER] 下单异常: {str(e)}")
+        success = False
+        error_msg = str(e)
+
+    # 发送交易通知
+    title = f"{prefix} 交易信号: {signal} @ {INST_ID}"
+    message = (
+        f"账户: {suffix}\n"
+        f"信号类型: {signal}\n"
+        f"入场价格: {entry_price:.4f}\n"
+        f"委托数量: {size}\n"
+        f"保证金: {MARGIN} USDT\n"
+        f"杠杆: {LEVERAGE}倍\n"
+        f"合约面值: {CONTRACT_FACE_VALUE}\n"
+        f"止盈价: {take_profit_price:.4f} ({TAKE_PROFIT_PERCENT * 100:.2f}%)\n"
+        f"止损价: {stop_loss_price:.4f} ({STOP_LOSS_PERCENT * 100:.2f}%)"
+    )
+    
+    # 如果下单失败，添加错误信息
+    if not success:
+        message += f"\n\n⚠️ 下单失败 ⚠️\n错误: {error_msg}"
+    
+    send_bark_notification(title, message)
+
+    # 日志输出
+    print(f"[{get_beijing_time()}] {prefix} [SIGNAL] {signal}@{entry_price:.4f}")
+    print(f"[{get_beijing_time()}] {prefix} [ORDER] {json.dumps(order_params)}")
+    print(f"[{get_beijing_time()}] {prefix} [RESULT] {json.dumps(order_result)}")
+
+
+def get_kline_data():
+    """获取并分析K线数据，返回信号和入场价"""
+    # 初始化通用API
+    default_api_key = os.getenv("OKX_API_KEY")
+    default_secret_key = os.getenv("OKX_SECRET_KEY")
+    default_passphrase = os.getenv("OKX_PASSPHRASE")
+    flag = os.getenv("OKX_FLAG", "0")  # 默认实盘
+    
+    if not all([default_api_key, default_secret_key, default_passphrase]):
+        print(f"[{get_beijing_time()}] [ERROR] 默认账户信息缺失，无法获取K线数据")
+        return None, None, None
+    
+    # 初始化API
+    try:
+        market_api = MarketData.MarketAPI(
+            default_api_key, default_secret_key, default_passphrase, False, flag
+        )
+        market_api.OK_ACCESS_TIMESTAMP = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+        print(f"[{get_beijing_time()}] [MARKET] K线API初始化成功")
+    except Exception as e:
+        print(f"[{get_beijing_time()}] [ERROR] K线API初始化失败: {str(e)}")
+        return None, None, None
     
     # 获取最近K线数据
     result = market_api.get_candlesticks(instId=INST_ID, bar=BAR, limit=str(LIMIT))
 
     if not result or 'data' not in result or len(result['data']) < 2:
         print(f"[{get_beijing_time()}] [ERROR] 获取K线数据失败或数据不足")
-        exit(1)
+        return None, None, None
 
     # 提取倒数第二根K线(前一根K线)
     prev_kline = result['data'][1]
@@ -303,133 +450,25 @@ if __name__ == "__main__":
         )
         send_bark_notification(title, message)
         print(f"[{get_beijing_time()}] [AMPLITUDE] 发送振幅预警通知")
+    
+    return signal, entry_price, amp_info
 
-    # 如果有交易信号
-    if signal:
-        # 1. 撤销现有的开仓订单
-        print(f"[{get_beijing_time()}] [ORDER] 检测到信号，先撤销现有开仓订单")
-        canceled = cancel_pending_open_orders(trade_api)
-        
-        # 2. 计算合约数量（考虑合约面值）
-        raw_size = (MARGIN * LEVERAGE) / (CONTRACT_FACE_VALUE * entry_price)
-        size_rounded = round(raw_size, SizePoint)
-        
-        # 确保数量为10的整数倍
-        if raw_size >= 1:
-            # 向下取整到最近的10的倍数
-            size = int(size_rounded // 10) * 10
-            
-            # 特殊处理：如果四舍五入后的值接近10的倍数但向下取整后为0
-            if size == 0 and size_rounded >= 5:  # 如果大于等于5但小于10，使用最小交易量10
-                size = 10
-                print(f"[{get_beijing_time()}] [SIZE_ADJUST] 数量过小但≥5，调整为最小交易量10")
-        else:
-            size = 0
-            print(f"[{get_beijing_time()}] [ERROR] 计算数量过小: {size_rounded}，无法交易")
-        
-        # 检查最终数量是否有效
-        if size == 0:
-            print(f"[{get_beijing_time()}] [ERROR] 最终数量为0，放弃交易")
-            
-            # 发送失败通知
-            send_bark_notification(
-                "交易失败",
-                f"计算数量为0，放弃交易\n"
-                f"原始计算值: {raw_size:.4f}\n"
-                f"四舍五入后: {size_rounded}\n"
-                f"标的: {INST_ID}\n"
-                f"入场价: {entry_price:.4f}\n"
-                f"保证金: {MARGIN} USDT"
-            )
-            # 直接退出，不进行后续交易
-            exit(1)
-        
-        print(f"[{get_beijing_time()}] [SIZE_CALC] 计算详情:")
-        print(f"  原始数量: {raw_size:.4f}")
-        print(f"  四舍五入后: {size_rounded}")
-        print(f"  调整后数量: {size} (10的倍数)")
 
-        # 根据信号方向计算止盈止损价格
-        if signal == "LONG":
-            take_profit_price = round(entry_price * (1 + TAKE_PROFIT_PERCENT), 5)
-            stop_loss_price = round(entry_price * (1 - STOP_LOSS_PERCENT), 5)
-        else:  # SHORT
-            take_profit_price = round(entry_price * (1 - TAKE_PROFIT_PERCENT), 5)
-            stop_loss_price = round(entry_price * (1 + STOP_LOSS_PERCENT), 5)
-
-        # 生成符合要求的clOrdId
-        cl_ord_id = generate_clord_id()
-
-        # 构建止盈止损对象列表
-        attach_algo_ord = {
-            "attachAlgoClOrdId": generate_clord_id(),
-            "tpTriggerPx": str(take_profit_price),
-            "tpOrdPx": "-1",  # 市价止盈
-            "tpOrdKind": "condition",
-            "slTriggerPx": str(stop_loss_price),
-            "slOrdPx": "-1",  # 市价止损
-            "tpTriggerPxType": "last",
-            "slTriggerPxType": "last"
-        }
-
-        # 重构交易参数
-        order_params = {
-            "instId": INST_ID,
-            "tdMode": "cross",
-            "side": "buy" if signal == "LONG" else "sell",
-            "ordType": "limit",
-            "px": str(entry_price),
-            "sz": str(size),
-            "clOrdId": cl_ord_id,
-            "posSide": "long" if signal == "LONG" else "short",
-            "attachAlgoOrds": [attach_algo_ord]
-        }
-
-        print(f"[{get_beijing_time()}] [ORDER] 准备下单参数: {json.dumps(order_params, indent=2)}")
-
-        # 发送订单
-        try:
-            order_result = trade_api.place_order(**order_params)
-            print(f"[{get_beijing_time()}] [ORDER] 订单提交结果: {json.dumps(order_result)}")
-            
-            # 检查是否成功下单
-            if order_result and 'code' in order_result and order_result['code'] == '0':
-                success = True
-            else:
-                success = False
-                error_msg = order_result.get('msg', '') if order_result else '下单失败，无响应'
-        except Exception as e:
-            print(f"[{get_beijing_time()}] [ORDER] 下单异常: {str(e)}")
-            success = False
-            error_msg = str(e)
-
-        # 发送交易通知
-        title = f"交易信号: {signal} @ {INST_ID}"
-        message = (
-            f"信号类型: {signal}\n"
-            f"入场价格: {entry_price:.4f}\n"
-            f"委托数量: {size}\n"
-            f"保证金: {MARGIN} USDT\n"
-            f"杠杆: {LEVERAGE}倍\n"
-            f"合约面值: {CONTRACT_FACE_VALUE}\n"
-            f"止盈价: {take_profit_price:.4f} ({TAKE_PROFIT_PERCENT * 100:.2f}%)\n"
-            f"止损价: {stop_loss_price:.4f} ({STOP_LOSS_PERCENT * 100:.2f}%)"
-        )
-        
-        # 如果下单失败，添加错误信息
-        if not success:
-            message += f"\n\n⚠️ 下单失败 ⚠️\n错误: {error_msg}"
-        
-        send_bark_notification(title, message)
-
-        # 日志输出
-        print(f"[{get_beijing_time()}] [SIGNAL] {signal}@{entry_price:.4f}")
-        print(f"[{get_beijing_time()}] [ORDER] {json.dumps(order_params)}")
-        print(f"[{get_beijing_time()}] [RESULT] {json.dumps(order_result)}")
-    else:
+if __name__ == "__main__":
+    # 1. 获取K线数据并分析信号
+    signal, entry_price, amp_info = get_kline_data()
+    if not signal:
         print(f"[{get_beijing_time()}] [INFO] 未检测到交易信号")
         print(f"[{get_beijing_time()}] [AMP_DETAIL] "
               f"振幅范围1: {amp_info['in_range1']} "
               f"振幅范围2: {amp_info['in_range2']} "
               f"实体变动: {amp_info['body_change_perc']:.2f}% "
               f"总振幅: {amp_info['total_range_perc']:.2f}%")
+        exit(0)
+    
+    # 2. 遍历所有账户执行交易
+    print(f"[{get_beijing_time()}] [ACCOUNTS] 开始处理所有账户交易")
+    for suffix in ACCOUNT_SUFFIXES:
+        process_account_trading(suffix, signal, entry_price, amp_info)
+    
+    print(f"[{get_beijing_time()}] [COMPLETE] 所有账户交易处理完成")
