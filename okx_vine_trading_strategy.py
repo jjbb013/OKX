@@ -20,7 +20,7 @@ INST_ID = "VINE-USDT-SWAP"  # 交易标的
 BAR = "5m"  # K线规格
 LIMIT = 2  # 获取K线数量
 LEVERAGE = 10  # 杠杆倍数
-SizePoint = 2  # 下单数量的小数点保留位数
+SizePoint = 0  # 下单数量的小数点保留位数
 
 # 振幅阈值参数
 RANGE1_MIN = 1.0  # 振幅范围1最小值(1%)
@@ -310,15 +310,15 @@ if __name__ == "__main__":
         canceled = cancel_pending_open_orders(trade_api)
         
         # 2. 计算合约数量
-        size = round((MARGIN * LEVERAGE * 10 ) / entry_price, SizePoint) # 乘以10是标准倍数，如果不乘保证金会小十倍。
+        size = round((MARGIN * LEVERAGE ) / entry_price, SizePoint) 
 
         # 根据信号方向计算止盈止损价格
         if signal == "LONG":
-            take_profit_price = round(entry_price * (1 + TAKE_PROFIT_PERCENT), 4)
-            stop_loss_price = round(entry_price * (1 - STOP_LOSS_PERCENT), 4)
+            take_profit_price = round(entry_price * (1 + TAKE_PROFIT_PERCENT), 5)
+            stop_loss_price = round(entry_price * (1 - STOP_LOSS_PERCENT), 5)
         else:  # SHORT
-            take_profit_price = round(entry_price * (1 - TAKE_PROFIT_PERCENT), 4)
-            stop_loss_price = round(entry_price * (1 + STOP_LOSS_PERCENT), 4)
+            take_profit_price = round(entry_price * (1 - TAKE_PROFIT_PERCENT), 5)
+            stop_loss_price = round(entry_price * (1 + STOP_LOSS_PERCENT), 5)
 
         # 生成符合要求的clOrdId
         cl_ord_id = generate_clord_id()
