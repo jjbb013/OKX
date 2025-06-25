@@ -1,6 +1,6 @@
 """
 任务名称
-name: OKX 多账户API测试（含延迟撤销）
+name: OKX 多账户API测试（批量创建+批量撤销）
 定时规则
 cron: 0 0 0 * * ?  # 每天运行一次
 """
@@ -22,8 +22,6 @@ TEST_SIZE = 10  # 测试订单数量（张）
 TEST_SIDE = "buy"  # 买入方向
 TEST_POS_SIDE = "long"  # 做多
 WAIT_SECONDS = 60  # 订单创建后等待时间（秒）
-WAIT_ATTEMPTS = 60  # 最大等待检查次数（等待1分钟）
-WAIT_INTERVAL = 1   # 等待间隔（秒）
 
 # 网络请求重试配置
 MAX_RETRIES = 3  # 最大重试次数
@@ -36,31 +34,8 @@ def get_beijing_time():
     beijing_tz = timezone(timedelta(hours=8))
     return datetime.now(beijing_tz).strftime("%Y-%m-%d %H:%M:%S")
 
-def test_account_api(account_suffix):
-    """测试单个账户的API功能"""
-    # 准备账户标识
-    suffix = account_suffix if account_suffix else ""  # 空后缀对应默认账户
-    prefix = "[ACCOUNT-" + suffix + "]" if suffix else "[ACCOUNT]"
-    
-    # 从环境变量获取账户信息
-    api_key = os.getenv(f"OKX_API_KEY{suffix}")
-    secret_key = os.getenv(f"OKX_SECRET_KEY{suffix}")
-    passphrase = os.getenv(f"OKX_PASSPHRASE{suffix}")
-    flag = os.getenv(f"OKX_FLAG{suffix}", "0")  # 默认实盘
-    
-    if not all([api_key, secret_key, passphrase]):
-        print(f"[{get_beijing_time()}] {prefix} [ERROR] 账户信息不完整或未配置")
-        return False, "账户信息不完整"
-    
-    # 初始化API
-    try:
-        trade_api = Trade.TradeAPI(api_key, secret_key, passphrase, False, flag)
-        print(f"[{get_beijing_time()}] {prefix} API初始化成功")
-    except Exception as e:
-        error_msg = f"API初始化失败: {str(e)}"
-        print(f"[{get_beijing_time()}] {prefix} [ERROR] {error_msg}")
-        return False, error_msg
-    
+def create_test_order(trade_api, account_prefix):
+    """为单个账户创建测试订单"""
     # 创建测试订单
     order_params = {
         "instId": TEST_INST_ID,
@@ -72,73 +47,58 @@ def test_account_api(account_suffix):
         "posSide": TEST_POS_SIDE
     }
     
-    print(f"[{get_beijing_time()}] {prefix} [TEST] 创建测试订单: {json.dumps(order_params)}")
+    print(f"[{get_beijing_time()}] {account_prefix} [CREATE] 创建测试订单: {json.dumps(order_params)}")
     
-    order_result = None
     for attempt in range(MAX_RETRIES + 1):
         try:
             order_result = trade_api.place_order(**order_params)
-            print(f"[{get_beijing_time()}] {prefix} [TEST] 订单创建结果: {json.dumps(order_result)}")
-            break
+            print(f"[{get_beijing_time()}] {account_prefix} [CREATE] 订单创建结果: {json.dumps(order_result)}")
+            
+            if order_result and 'code' in order_result and order_result['code'] == '0':
+                ord_id = order_result['data'][0]['ordId']
+                print(f"[{get_beijing_time()}] {account_prefix} [SUCCESS] 测试订单创建成功, ordId={ord_id}")
+                return True, ord_id, None
+            else:
+                error_msg = order_result.get('msg', '未知错误') if order_result else '无响应'
+                print(f"[{get_beijing_time()}] {account_prefix} [ERROR] 创建订单失败: {error_msg}")
+                return False, None, f"订单创建失败: {error_msg}"
         except Exception as e:
             error_msg = f"创建订单异常 (尝试 {attempt+1}/{MAX_RETRIES+1}): {str(e)}"
-            print(f"[{get_beijing_time()}] {prefix} [ERROR] {error_msg}")
+            print(f"[{get_beijing_time()}] {account_prefix} [ERROR] {error_msg}")
             if attempt < MAX_RETRIES:
-                print(f"[{get_beijing_time()}] {prefix} [TEST] 重试中... ({attempt+1}/{MAX_RETRIES})")
+                print(f"[{get_beijing_time()}] {account_prefix} [CREATE] 重试中... ({attempt+1}/{MAX_RETRIES})")
+                time.sleep(RETRY_DELAY)
+            else:
+                return False, None, error_msg
+    
+    return False, None, "未知错误"
+
+def cancel_test_order(trade_api, account_prefix, ord_id):
+    """为单个账户撤销测试订单"""
+    print(f"[{get_beijing_time()}] {account_prefix} [CANCEL] 撤销测试订单: ordId={ord_id}")
+    
+    for cancel_attempt in range(MAX_RETRIES + 1):
+        try:
+            cancel_result = trade_api.cancel_order(instId=TEST_INST_ID, ordId=ord_id)
+            print(f"[{get_beijing_time()}] {account_prefix} [CANCEL] 撤单结果: {json.dumps(cancel_result)}")
+            
+            if cancel_result and 'code' in cancel_result and cancel_result['code'] == '0':
+                print(f"[{get_beijing_time()}] {account_prefix} [SUCCESS] 测试订单撤销成功")
+                return True, "订单撤销成功"
+            else:
+                error_msg = cancel_result.get('msg', '未知错误') if cancel_result else '无响应'
+                print(f"[{get_beijing_time()}] {account_prefix} [ERROR] 撤销订单失败: {error_msg}")
+                return False, f"订单撤销失败: {error_msg}"
+        except Exception as e:
+            error_msg = f"撤销订单异常 (尝试 {cancel_attempt+1}/{MAX_RETRIES+1}): {str(e)}"
+            print(f"[{get_beijing_time()}] {account_prefix} [ERROR] {error_msg}")
+            if cancel_attempt < MAX_RETRIES:
+                print(f"[{get_beijing_time()}] {account_prefix} [CANCEL] 重试中... ({cancel_attempt+1}/{MAX_RETRIES})")
                 time.sleep(RETRY_DELAY)
             else:
                 return False, error_msg
     
-    # 检查订单创建结果
-    if order_result and 'code' in order_result and order_result['code'] == '0':
-        ord_id = order_result['data'][0]['ordId']
-        print(f"[{get_beijing_time()}] {prefix} [SUCCESS] 测试订单创建成功, ordId={ord_id}")
-        
-        # 等待1分钟后撤销订单
-        print(f"[{get_beijing_time()}] {prefix} [TEST] 等待{WAIT_SECONDS}秒后撤销订单...")
-        
-        # 等待期间检查订单状态
-        for i in range(WAIT_ATTEMPTS):
-            time.sleep(WAIT_INTERVAL)
-            if (i + 1) % 10 == 0:  # 每10秒打印一次状态
-                print(f"[{get_beijing_time()}] {prefix} [TEST] 已等待 {i+1} 秒...")
-        
-        # 撤销测试订单
-        print(f"[{get_beijing_time()}] {prefix} [TEST] 撤销测试订单: ordId={ord_id}")
-        cancel_result = None
-        
-        for cancel_attempt in range(MAX_RETRIES + 1):
-            try:
-                cancel_result = trade_api.cancel_order(instId=TEST_INST_ID, ordId=ord_id)
-                print(f"[{get_beijing_time()}] {prefix} [TEST] 撤单结果: {json.dumps(cancel_result)}")
-                
-                if cancel_result and 'code' in cancel_result and cancel_result['code'] == '0':
-                    print(f"[{get_beijing_time()}] {prefix} [SUCCESS] 测试订单撤销成功")
-                    return True, "订单创建并成功撤销"
-                else:
-                    error_msg = cancel_result.get('msg', '未知错误') if cancel_result else '无响应'
-                    print(f"[{get_beijing_time()}] {prefix} [ERROR] 撤销订单失败: {error_msg}")
-                    
-                    if cancel_attempt < MAX_RETRIES:
-                        print(f"[{get_beijing_time()}] {prefix} [TEST] 撤单重试中... ({cancel_attempt+1}/{MAX_RETRIES})")
-                        time.sleep(RETRY_DELAY)
-                    else:
-                        return True, f"订单创建成功但撤销失败: {error_msg}"
-            
-            except Exception as e:
-                error_msg = f"撤销订单异常 (尝试 {cancel_attempt+1}/{MAX_RETRIES+1}): {str(e)}"
-                print(f"[{get_beijing_time()}] {prefix} [ERROR] {error_msg}")
-                
-                if cancel_attempt < MAX_RETRIES:
-                    print(f"[{get_beijing_time()}] {prefix} [TEST] 撤单重试中... ({cancel_attempt+1}/{MAX_RETRIES})")
-                    time.sleep(RETRY_DELAY)
-                else:
-                    return True, f"订单创建成功但撤销异常: {error_msg}"
-    
-    else:
-        error_msg = order_result.get('msg', '未知错误') if order_result else '无响应'
-        print(f"[{get_beijing_time()}] {prefix} [ERROR] 创建订单失败: {error_msg}")
-        return False, f"订单创建失败: {error_msg}"
+    return False, "未知错误"
 
 def send_test_summary(results):
     """发送测试结果摘要"""
@@ -169,18 +129,83 @@ if __name__ == "__main__":
     test_results = []
     start_time = time.time()
     
-    # 遍历所有账户进行测试
-    for i, suffix in enumerate(ACCOUNT_SUFFIXES):
-        account_name = f"账户-{suffix}" if suffix else "默认账户"
-        print(f"\n[{get_beijing_time()}] [TEST] 开始测试账户 ({i+1}/{len(ACCOUNT_SUFFIXES)}): {account_name}")
+    # 存储账户信息和订单ID
+    account_orders = []
+    
+    # 第一阶段：为所有账户创建测试订单
+    print(f"\n[{get_beijing_time()}] [PHASE 1] 开始为所有账户创建测试订单")
+    
+    for suffix in ACCOUNT_SUFFIXES:
+        # 准备账户标识
+        suffix_str = suffix if suffix else ""  # 空后缀对应默认账户
+        prefix = "[ACCOUNT-" + suffix_str + "]" if suffix_str else "[ACCOUNT]"
         
-        success, detail = test_account_api(suffix)
-        test_results.append((account_name, success, detail))
+        # 从环境变量获取账户信息
+        api_key = os.getenv(f"OKX_API_KEY{suffix_str}")
+        secret_key = os.getenv(f"OKX_SECRET_KEY{suffix_str}")
+        passphrase = os.getenv(f"OKX_PASSPHRASE{suffix_str}")
+        flag = os.getenv(f"OKX_FLAG{suffix_str}", "0")  # 默认实盘
         
-        # 账户间测试间隔
-        if i < len(ACCOUNT_SUFFIXES) - 1:
-            print(f"[{get_beijing_time()}] [TEST] 等待5秒后测试下一个账户...")
-            time.sleep(5)
+        account_name = f"账户-{suffix_str}" if suffix_str else "默认账户"
+        
+        if not all([api_key, secret_key, passphrase]):
+            print(f"[{get_beijing_time()}] {prefix} [ERROR] 账户信息不完整或未配置")
+            test_results.append((account_name, False, "账户信息不完整"))
+            continue
+        
+        # 初始化API
+        try:
+            trade_api = Trade.TradeAPI(api_key, secret_key, passphrase, False, flag)
+            print(f"[{get_beijing_time()}] {prefix} API初始化成功")
+        except Exception as e:
+            error_msg = f"API初始化失败: {str(e)}"
+            print(f"[{get_beijing_time()}] {prefix} [ERROR] {error_msg}")
+            test_results.append((account_name, False, error_msg))
+            continue
+        
+        # 创建测试订单
+        success, ord_id, error_msg = create_test_order(trade_api, prefix)
+        
+        if success:
+            account_orders.append({
+                "account_name": account_name,
+                "prefix": prefix,
+                "trade_api": trade_api,
+                "ord_id": ord_id
+            })
+            test_results.append((account_name, True, "订单创建成功"))
+        else:
+            test_results.append((account_name, False, error_msg))
+    
+    # 等待1分钟
+    print(f"\n[{get_beijing_time()}] [WAITING] 所有账户订单已创建，等待{WAIT_SECONDS}秒...")
+    
+    for i in range(WAIT_SECONDS):
+        time.sleep(1)
+        if (i + 1) % 10 == 0:  # 每10秒打印一次状态
+            print(f"[{get_beijing_time()}] [WAITING] 已等待 {i+1} 秒...")
+    
+    print(f"[{get_beijing_time()}] [WAITING] 等待完成，开始撤销订单")
+    
+    # 第二阶段：为所有账户撤销测试订单
+    print(f"\n[{get_beijing_time()}] [PHASE 2] 开始为所有账户撤销测试订单")
+    
+    for order_info in account_orders:
+        account_name = order_info["account_name"]
+        prefix = order_info["prefix"]
+        trade_api = order_info["trade_api"]
+        ord_id = order_info["ord_id"]
+        
+        # 撤销订单
+        success, error_msg = cancel_test_order(trade_api, prefix, ord_id)
+        
+        # 更新测试结果
+        for i, (name, success_old, detail_old) in enumerate(test_results):
+            if name == account_name and success_old:
+                if success:
+                    test_results[i] = (name, True, "订单创建并成功撤销")
+                else:
+                    test_results[i] = (name, True, f"订单创建成功但撤销失败: {error_msg}")
     
     # 计算测试耗时
     total_time = time.time() - start_time
