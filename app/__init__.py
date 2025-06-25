@@ -6,6 +6,5 @@ PATH = Path(__file__).parent
 PATH.joinpath('templates').mkdir(exist_ok=True)
 PATH.joinpath('static').mkdir(exist_ok=True)
 PATH.joinpath('strategies').mkdir(exist_ok=True)
-
 # 确保strategies是一个Python包
 PATH.joinpath('strategies/__init__.py').touch(exist_ok=True)
