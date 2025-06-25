@@ -96,6 +96,11 @@ async def get_performance(strategy: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get('/get_kline_checks')
+async def get_kline_checks():
+    checks = r.lrange('kline_checks', 0, 4)
+    return [json.loads(check) for check in checks]
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

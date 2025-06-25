@@ -31,6 +31,16 @@ def run_strategies():
 
     print(f"Strategies run at {timestamp}. ETH: {eth_result}, Vine: {vine_result}")
 
+    # K线检查逻辑
+    kline_data = {
+        "timestamp": timestamp,
+        "eth_amplitude": eth_strategy.calculate_amplitude(),
+        "vine_swing": vine_strategy.check_swing_point(),
+        "price_change": eth_strategy.get_price_change()
+    }
+    r.lpush('kline_checks', json.dumps(kline_data))
+    r.ltrim('kline_checks', 0, 4)  # 保留最近5次检查
+
 def handler(event, context):
     run_strategies()
     return {

@@ -292,5 +292,47 @@
         // 每30秒刷新一次数据
         setInterval(refreshData, 30000);
     </script>
+
+    <!-- K线检查结果 -->
+    <div class="mt-8 bg-white rounded-lg shadow p-6">
+      <h2 class="text-xl font-bold mb-4">K线检查结果</h2>
+      <div id="kline-chart" class="h-64 mb-4"></div>
+      <div class="grid grid-cols-3 gap-4" id="kline-results">
+        <!-- 动态加载最近5次检查结果 -->
+      </div>
+    </div>
+
+    <script>
+    // 获取K线检查数据
+    async function loadKlineResults() {
+      const response = await fetch('/get_kline_checks');
+      const data = await response.json();
+      
+      // 渲染图表
+      new Chart(document.getElementById('kline-chart'), {
+        type: 'line',
+        data: {
+          labels: data.map(d => new Date(d.timestamp).toLocaleTimeString()),
+          datasets: [{
+            label: 'ETH振幅',
+            data: data.map(d => d.eth_amplitude),
+            borderColor: '#3b82f6'
+          }]
+        }
+      });
+      
+      // 渲染结果列表
+      document.getElementById('kline-results').innerHTML = data.map(item => 
+        `<div class="bg-gray-50 p-4 rounded">
+          <p class="text-sm">${new Date(item.timestamp).toLocaleString()}</p>
+          <p class="mt-2">ETH振幅: <span class="font-semibold">${item.eth_amplitude}%</span></p>
+          <p class="mt-1">摆动点: <span class="font-semibold">${item.vine_swing ? '✅' : '❌'}</span></p>
+        </div>`
+      ).join('');
+    }
+    
+    // 每30秒刷新数据
+    setInterval(loadKlineResults, 30000);
+    </script>
 </body>
 </html>
