@@ -11,7 +11,7 @@ import pandas as pd
 app = FastAPI(title="OKX Trading Dashboard")
 
 # 挂载静态文件和模板
-app.mount("/static", StaticFiles(directory="app/static"), name="static")
+app.mount("/static", StaticFiles(directory="/var/task/app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 
 # 导入交易策略模块
