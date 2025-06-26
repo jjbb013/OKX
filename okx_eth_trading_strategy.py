@@ -26,13 +26,13 @@ SizePoint = 2  # 下单数量的小数点保留位数
 
 # 振幅阈值参数
 RANGE1_MIN = 0.8  # 振幅范围1最小值(0.8%)
-RANGE1_MAX = 1.8  # 振幅范围1最大值(1.8%)
+RANGE1_MAX = 2  # 振幅范围1最大值(1.8%)
 RANGE2_THRESHOLD = 2  # 振幅范围2阈值(2%)
 
 # 交易执行参数
 MARGIN = 5  # 保证金(USDT)
-TAKE_PROFIT_PERCENT = 0.016  # 止盈比例改为1.6%
-STOP_LOSS_PERCENT = 0.019  # 止损比例(1.9%)
+TAKE_PROFIT_PERCENT = 0.017  # 止盈比例改为1.7%
+STOP_LOSS_PERCENT = 0.025  # 止损比例(2.5%)
 
 # 环境变量账户后缀，支持多账号 (如OKX_API_KEY1, OKX_SECRET_KEY1, OKX_PASSPHRASE1)
 ACCOUNT_SUFFIXES = ["", "1", "2", "3"]  # 空字符串代表无后缀的默认账号
