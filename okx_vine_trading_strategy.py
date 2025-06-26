@@ -5,8 +5,6 @@ name: OKX Vine 自动交易 PROD
 cron: 1 */5 * * * *
 """
 import os
-import pandas as pd
-import requests
 import json
 import random
 import string
@@ -14,7 +12,7 @@ import time
 from datetime import datetime, timezone, timedelta
 import okx.MarketData as MarketData
 import okx.Trade as Trade
-from notification_service import notification_service
+import notification_service
 
 # ============== 可配置参数区域 ==============
 # 交易标的参数
@@ -22,7 +20,7 @@ INST_ID = "VINE-USDT-SWAP"  # 交易标的
 BAR = "5m"  # K线规格
 LIMIT = 2  # 获取K线数量
 LEVERAGE = 10  # 杠杆倍数
-SizePoint = 0  # 下单数量的小数点保留位数
+SIZE_POINT = 0  # 下单数量的小数点保留位数
 CONTRACT_FACE_VALUE = 10  # VINE-USDT-SWAP合约面值为10美元
 
 # 振幅阈值参数
@@ -53,21 +51,18 @@ def get_beijing_time():
     return datetime.now(beijing_tz).strftime("%Y-%m-%d %H:%M:%S")
 
 
-def get_orders_pending(trade_api, account_prefix=""):
+def get_orders_pending(trade_api):
     """获取当前账户下所有未成交订单信息"""
     try:
-        # 使用Trade API的内部请求方法，只获取未成交订单
         result = trade_api.get_order_list(instId=INST_ID, state="live")
-        
         if result and 'code' in result and result['code'] == '0' and 'data' in result:
             print(f"[{get_beijing_time()}] [ORDERS] 成功获取{len(result['data'])}个未成交订单")
             return result['data']
-        else:
-            error_msg = result.get('msg', '') if result else '无响应'
-            print(f"[{get_beijing_time()}] [ORDERS] 获取未成交订单失败: {error_msg}")
-            return []
-    except Exception as e:
-        print(f"[{get_beijing_time()}] [ORDERS] 获取未成交订单异常: {str(e)}")
+        error_msg = result.get('msg', '') if result else '无响应'
+        print(f"[{get_beijing_time()}] [ORDERS] 获取未成交订单失败: {error_msg}")
+        return []
+    except Exception as err:  # pylint: disable=broad-except
+        print(f"[{get_beijing_time()}] [ORDERS] 获取未成交订单异常: {str(err)}")
         return []
 
 
@@ -77,58 +72,40 @@ def get_pending_open_orders(trade_api):
     撤销所有相同标的的未成交限价开仓订单
     """
     try:
-        # 获取所有未成交订单
         all_pending_orders = get_orders_pending(trade_api)
-        
-        # 过滤出需要撤销的订单：相同标的的限价开仓订单
         cancel_orders = []
         for order in all_pending_orders:
-            # 检查订单类型和方向
             ord_type = order.get('ordType', '')
             side = order.get('side', '')
             pos_side = order.get('posSide', '')
-            
-            # 撤销条件：限价订单 + 开仓订单（买入做多或卖出做空）
             is_limit_order = ord_type == 'limit'
             is_open_order = (
-                (side == 'buy' and pos_side == 'long') or  # 买入做多
-                (side == 'sell' and pos_side == 'short')   # 卖出做空
+                (side == 'buy' and pos_side == 'long') or
+                (side == 'sell' and pos_side == 'short')
             )
-            
             if is_limit_order and is_open_order:
                 cancel_orders.append({
                     "instId": INST_ID,
                     "ordId": order['ordId']
                 })
-                
                 print(f"[{get_beijing_time()}] [TO_CANCEL] 标记为待撤销: ordId={order['ordId']}, side={side}, posSide={pos_side}, ordType={ord_type}")
-        
         return cancel_orders
-    except Exception as e:
-        print(f"[{get_beijing_time()}] [ORDERS] 获取待撤销订单异常: {str(e)}")
+    except Exception as err:  # pylint: disable=broad-except
+        print(f"[{get_beijing_time()}] [ORDERS] 获取待撤销订单异常: {str(err)}")
         return []
 
 
 def cancel_pending_open_orders(trade_api):
     """批量撤销需要取消的开仓订单"""
-    # 获取需要撤销的订单列表
     cancel_orders = get_pending_open_orders(trade_api)
-    
     if not cancel_orders:
         print(f"[{get_beijing_time()}] [CANCEL] 无需要撤销的开仓订单")
-        return False  # 返回是否有订单被撤销
-    
+        return False
     try:
-        # 准备批量撤销请求
-        cancel_data = {
-            "cancels": cancel_orders
-        }
-        
+        cancel_data = {"cancels": cancel_orders}
         print(f"[{get_beijing_time()}] [CANCEL] 正在批量撤销{len(cancel_orders)}个开仓订单")
-        result = trade_api._request('POST', '/api/v5/trade/cancel-batch-orders', body=cancel_data)
-        
+        result = trade_api._request('POST', '/api/v5/trade/cancel-batch-orders', body=cancel_data)  # pylint: disable=protected-access
         if result and 'code' in result and result['code'] == '0':
-            # 成功响应
             failed_orders = []
             for order_result in result['data']:
                 if order_result['sCode'] != '0':
@@ -137,22 +114,18 @@ def cancel_pending_open_orders(trade_api):
                         "code": order_result['sCode'],
                         "msg": order_result['sMsg']
                     })
-            
             if failed_orders:
                 print(f"[{get_beijing_time()}] [CANCEL] 部分订单撤销失败: {json.dumps(failed_orders)}")
                 return False
-            else:
-                print(f"[{get_beijing_time()}] [CANCEL] 所有{len(cancel_orders)}个订单撤销成功")
-                # 撤销成功后等待一段时间确保撤销操作完成
-                print(f"[{get_beijing_time()}] [CANCEL] 等待2秒确保撤销操作完成...")
-                time.sleep(2)
-                return True
-        else:
-            error_msg = result.get('msg', '') if result else '无响应'
-            print(f"[{get_beijing_time()}] [CANCEL] 批量撤销失败: {error_msg}")
-            return False
-    except Exception as e:
-        print(f"[{get_beijing_time()}] [CANCEL] 撤销订单异常: {str(e)}")
+            print(f"[{get_beijing_time()}] [CANCEL] 所有{len(cancel_orders)}个订单撤销成功")
+            print(f"[{get_beijing_time()}] [CANCEL] 等待2秒确保撤销操作完成...")
+            time.sleep(2)
+            return True
+        error_msg = result.get('msg', '') if result else '无响应'
+        print(f"[{get_beijing_time()}] [CANCEL] 批量撤销失败: {error_msg}")
+        return False
+    except Exception as err:  # pylint: disable=broad-except
+        print(f"[{get_beijing_time()}] [CANCEL] 撤销订单异常: {str(err)}")
         return False
 
 
@@ -225,7 +198,7 @@ def generate_clord_id():
     return f"{PREFIX}{timestamp}{random_str}"[:32]
 
 
-def process_account_trading(account_index, signal, entry_price, amp_info):
+def process_account_trading(account_index, signal, entry_price):
     """处理单个账户的交易操作"""
     # 从环境变量获取账户信息
     suffix = account_index if account_index else ""  # 空后缀对应默认账户
@@ -250,11 +223,11 @@ def process_account_trading(account_index, signal, entry_price, amp_info):
     
     # 1. 撤销现有的开仓订单
     print(f"[{get_beijing_time()}] {prefix} [ORDER] 正在撤销现有开仓订单")
-    canceled = cancel_pending_open_orders(trade_api)
+    cancel_pending_open_orders(trade_api)
     
     # 2. 计算合约数量（考虑合约面值）
     raw_size = (MARGIN * LEVERAGE) / (CONTRACT_FACE_VALUE * entry_price)
-    size_rounded = round(raw_size, SizePoint)
+    size_rounded = round(raw_size, SIZE_POINT)
     
     # 确保数量为10的整数倍
     if raw_size >= 1:
@@ -274,7 +247,7 @@ def process_account_trading(account_index, signal, entry_price, amp_info):
         print(f"[{get_beijing_time()}] {prefix} [ERROR] 最终数量为0，放弃交易")
         
         # 发送失败通知
-        notification_service.send_bark_notification(
+        notification_service.notification_service.send_bark_notification(
             f"{prefix} 交易失败",
             f"计算数量为0，放弃交易\n"
             f"入场价格: {entry_price:.4f}\n"
@@ -345,24 +318,18 @@ def process_account_trading(account_index, signal, entry_price, amp_info):
         error_msg = str(e)
 
     # 发送交易通知
-    title = f"{prefix} 交易信号: {signal} @ {INST_ID}"
-    message = (
-        f"账户: {suffix}\n"
-        f"信号类型: {signal}\n"
-        f"入场价格: {entry_price:.4f}\n"
-        f"委托数量: {size}\n"
-        f"保证金: {MARGIN} USDT\n"
-        f"杠杆: {LEVERAGE}倍\n"
-        f"合约面值: {CONTRACT_FACE_VALUE}\n"
-        f"止盈价: {take_profit_price:.4f} ({TAKE_PROFIT_PERCENT * 100:.2f}%)\n"
-        f"止损价: {stop_loss_price:.4f} ({STOP_LOSS_PERCENT * 100:.2f}%)"
+    notification_service.notification_service.send_trading_notification(
+        account_name=prefix,
+        inst_id=INST_ID,
+        signal_type=signal,
+        entry_price=entry_price,
+        size=size,
+        margin=MARGIN,
+        take_profit_price=take_profit_price,
+        stop_loss_price=stop_loss_price,
+        success=success,
+        error_msg=error_msg
     )
-    
-    # 如果下单失败，添加错误信息
-    if not success:
-        message += f"\n\n⚠️ 下单失败 ⚠️\n错误: {error_msg}"
-    
-    notification_service.send_notification(title, message)
 
     # 日志输出
     print(f"[{get_beijing_time()}] {prefix} [SIGNAL] {signal}@{entry_price:.4f}")
@@ -426,15 +393,13 @@ def get_kline_data():
 
     # 满足振幅条件时发送通知
     if amp_info['in_range1'] or amp_info['in_range2']:
-        title = f"振幅预警! {INST_ID} 实体变动: {amp_info['body_change_perc']:.2f}%"
-        message = (
-            f"时间: {get_beijing_time()}\n"
-            f"开盘: {amp_info['open']:.4f}\n"
-            f"收盘: {amp_info['close']:.4f}\n"
-            f"总振幅: {amp_info['total_range_perc']:.2f}%\n"
-            f"条件: {amp_info['condition']}"
+        notification_service.notification_service.send_amplitude_alert(
+            symbol=INST_ID,
+            amplitude=amp_info['body_change_perc'],
+            threshold=RANGE2_THRESHOLD,
+            open_price=amp_info['open'],
+            latest_price=amp_info['close']
         )
-        notification_service.send_notification(title, message)
         print(f"[{get_beijing_time()}] [AMPLITUDE] 发送振幅预警通知")
     
     return signal, entry_price, amp_info
@@ -458,6 +423,6 @@ if __name__ == "__main__":
     # 2. 遍历所有账户执行交易
     print(f"[{get_beijing_time()}] [ACCOUNTS] 开始处理所有账户交易")
     for suffix in ACCOUNT_SUFFIXES:
-        process_account_trading(suffix, signal, entry_price, amp_info)
+        process_account_trading(suffix, signal, entry_price)
     
     print(f"[{get_beijing_time()}] [COMPLETE] 所有账户交易处理完成")
