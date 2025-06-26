@@ -2,7 +2,7 @@
 任务名称
 name: OKX 多账户API测试（批量创建+批量撤销）
 定时规则
-cron: 0 0 0 * * ?
+cron: 1 1 1 1 *
 """
 import os
 import json
