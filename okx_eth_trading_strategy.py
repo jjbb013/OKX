@@ -41,7 +41,7 @@ BARK_KEY = os.getenv("BARK_KEY")
 BARK_GROUP = os.getenv("BARK_GROUP", "OKX自动交易通知")
 
 # 前缀生成配置
-PREFIX = INST_ID.split('-')[0]  # 使用标的名称作为前缀(如ETH)
+PREFIX = "ETH"  # 使用标的名称作为前缀(如ETH)
 
 # 网络请求重试配置
 MAX_RETRIES = 3  # 最大重试次数
@@ -257,7 +257,7 @@ def generate_clord_id(prefix):
     """生成符合OKX要求的clOrdId：字母数字组合，1-32位"""
     timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
     random_str = ''.join(random.choices(string.ascii_letters + string.digits, k=6))
-    return f"{timestamp}{random_str}"[:32]
+    return f"{prefix}{timestamp}{random_str}"[:32]
 
 
 def process_account_trading(account_suffix, signal, entry_price, amp_info):
