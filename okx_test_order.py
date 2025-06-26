@@ -2,7 +2,7 @@
 任务名称
 name: OKX 多账户API测试（批量创建+批量撤销）
 定时规则
-cron: 0 0 0 * * ?  # 每天运行一次
+cron: 0 0 0 * * ?
 """
 import os
 import json
@@ -13,7 +13,7 @@ import okx.Trade as Trade
 
 # ============== 可配置参数区域 ==============
 # 环境变量账户后缀，支持多账号 (如OKX_API_KEY1, OKX_SECRET_KEY1, OKX_PASSPHRASE1)
-ACCOUNT_SUFFIXES = ["", "1", "2", "3"]  # 空字符串代表无后缀的默认账号
+ACCOUNT_SUFFIXES = ["", "1"]  # 空字符串代表无后缀的默认账号
 
 # 测试订单参数
 TEST_INST_ID = "ETH-USDT-SWAP"  # 测试交易标的
