@@ -257,7 +257,7 @@ def generate_clord_id(prefix):
     """生成符合OKX要求的clOrdId：字母数字组合，1-32位"""
     timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
     random_str = ''.join(random.choices(string.ascii_letters + string.digits, k=6))
-    return f"{prefix}{timestamp}{random_str}"[:32]
+    return f"{PREFIX}{timestamp}{random_str}"[:32]
 
 
 def process_account_trading(account_suffix, signal, entry_price, amp_info):
