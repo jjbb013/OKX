@@ -133,33 +133,43 @@ def should_cancel_order(order, current_price, account_prefix=""):
         
         if not (is_long or is_short):
             print(f"[{get_beijing_time()}] {account_prefix} [CHECK] 订单{ord_id} 方向不明确: side={side}, posSide={pos_side}")
-            return False, "方向不明确"
+            return False, "方向不明确", None
+        
+        # 获取止盈价格
+        take_profit_price = None
+        linked_algo = order.get('linkedAlgoOrd', {})
+        if linked_algo and 'tpTriggerPx' in linked_algo:
+            take_profit_price = float(linked_algo['tpTriggerPx'])
+            print(f"[{get_beijing_time()}] {account_prefix} [CHECK] 订单{ord_id} 止盈价格: {take_profit_price}")
+        else:
+            print(f"[{get_beijing_time()}] {account_prefix} [CHECK] 订单{ord_id} 无止盈价格信息")
+            return False, "无止盈价格信息", None
         
         # 判断是否需要撤销
         should_cancel = False
         reason = ""
         
         if is_long:
-            # 做多订单：当前价格超过委托价格时撤销
-            if current_price > order_price * (1 + PRICE_TOLERANCE):
+            # 做多订单：当前价格超过止盈价格时撤销
+            if current_price > take_profit_price * (1 + PRICE_TOLERANCE):
                 should_cancel = True
-                reason = f"做多订单，当前价格({current_price:.4f})已超过委托价格({order_price:.4f})"
+                reason = f"做多订单，当前价格({current_price:.4f})已超过止盈价格({take_profit_price:.4f})"
         elif is_short:
-            # 做空订单：当前价格低于委托价格时撤销
-            if current_price < order_price * (1 - PRICE_TOLERANCE):
+            # 做空订单：当前价格低于止盈价格时撤销
+            if current_price < take_profit_price * (1 - PRICE_TOLERANCE):
                 should_cancel = True
-                reason = f"做空订单，当前价格({current_price:.4f})已低于委托价格({order_price:.4f})"
+                reason = f"做空订单，当前价格({current_price:.4f})已低于止盈价格({take_profit_price:.4f})"
         
         if should_cancel:
             print(f"[{get_beijing_time()}] {account_prefix} [CHECK] 订单{ord_id} 需要撤销: {reason}")
         else:
-            print(f"[{get_beijing_time()}] {account_prefix} [CHECK] 订单{ord_id} 无需撤销: 当前价格={current_price:.4f}, 委托价格={order_price:.4f}")
+            print(f"[{get_beijing_time()}] {account_prefix} [CHECK] 订单{ord_id} 无需撤销: 当前价格={current_price:.4f}, 止盈价格={take_profit_price:.4f}")
         
-        return should_cancel, reason
+        return should_cancel, reason, take_profit_price
         
     except Exception as e:
         print(f"[{get_beijing_time()}] {account_prefix} [CHECK] 判断订单{order.get('ordId', 'unknown')}时异常: {str(e)}")
-        return False, f"判断异常: {str(e)}"
+        return False, f"判断异常: {str(e)}", None
 
 def cancel_order(trade_api, inst_id, ord_id, account_prefix=""):
     """撤销指定订单"""
@@ -252,7 +262,7 @@ def process_account_orders(account_suffix):
         
         # 检查每个订单
         for order in pending_orders:
-            should_cancel, reason = should_cancel_order(order, current_price, prefix)
+            should_cancel, reason, take_profit_price = should_cancel_order(order, current_price, prefix)
             
             if should_cancel:
                 # 撤销订单
@@ -260,12 +270,15 @@ def process_account_orders(account_suffix):
                 
                 if success:
                     canceled_count += 1
+                    print(f"[{get_beijing_time()}] {prefix} [CHECK] 订单{order['ordId']} 止盈价格: {take_profit_price}")
+                    
                     canceled_orders.append({
                         "inst_id": inst_id,
                         "ord_id": order['ordId'],
                         "side": order['side'],
                         "pos_side": order.get('posSide', ''),
                         "order_price": float(order['px']),
+                        "take_profit_price": take_profit_price,
                         "current_price": current_price,
                         "reason": reason
                     })
@@ -278,6 +291,7 @@ def process_account_orders(account_suffix):
                         f"订单ID: {order['ordId']}\n"
                         f"方向: {order['side']} {order.get('posSide', '')}\n"
                         f"委托价格: {order['px']}\n"
+                        f"止盈价格: {take_profit_price:.4f}\n"
                         f"当前价格: {current_price:.4f}\n"
                         f"撤销原因: {reason}"
                     )
