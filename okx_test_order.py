@@ -155,6 +155,10 @@ if __name__ == "__main__":
         
         # 初始化API
         try:
+            # 确保所有参数都不为None
+            if api_key is None or secret_key is None or passphrase is None:
+                raise ValueError("API密钥、密钥或密码不能为空")
+            
             trade_api = Trade.TradeAPI(api_key, secret_key, passphrase, False, flag)
             print(f"[{get_beijing_time()}] {prefix} API初始化成功")
         except Exception as e:
