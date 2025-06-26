@@ -1,6 +1,6 @@
 """
 任务名称
-name: OKX VINE 自动交易 PROD
+name: OKX Vine 自动交易 PROD
 定时规则
 cron: 1 */5 * * * *
 """
@@ -10,9 +10,11 @@ import requests
 import json
 import random
 import string
+import time
 from datetime import datetime, timezone, timedelta
 import okx.MarketData as MarketData
 import okx.Trade as Trade
+from notification_service import notification_service
 
 # ============== 可配置参数区域 ==============
 # 交易标的参数
@@ -36,12 +38,12 @@ STOP_LOSS_PERCENT = 0.03  # 止损比例(3%)
 # 环境变量账户后缀，支持多账号 (如OKX_API_KEY1, OKX_SECRET_KEY1, OKX_PASSPHRASE1)
 ACCOUNT_SUFFIXES = ["", "1", "2", "3"]  # 空字符串代表无后缀的默认账号
 
-# Bark通知配置
-BARK_KEY = os.getenv("BARK_KEY")
-BARK_GROUP = os.getenv("BARK_GROUP", "OKX自动交易通知")
-
 # 前缀生成配置
-PREFIX = INST_ID.split('-')[0]  # 使用标的名称作为前缀(如ETH)
+PREFIX = "VINE"  # 使用标的名称作为前缀(如VINE)
+
+# 网络请求重试配置
+MAX_RETRIES = 3  # 最大重试次数
+RETRY_DELAY = 2  # 重试间隔(秒)
 
 # ==========================================
 
@@ -51,31 +53,7 @@ def get_beijing_time():
     return datetime.now(beijing_tz).strftime("%Y-%m-%d %H:%M:%S")
 
 
-def send_bark_notification(title, message):
-    """发送Bark通知"""
-    if not BARK_KEY:
-        print(f"[{get_beijing_time()}] [ERROR] 缺少BARK_KEY配置")
-        return
-
-    payload = {
-        'title': title,
-        'body': message,
-        'group': BARK_GROUP,
-        'sound': 'minuet'
-    }
-    headers = {'Content-Type': 'application/json'}
-
-    try:
-        response = requests.post(BARK_KEY, json=payload, headers=headers)
-        if response.status_code == 200:
-            print(f"[{get_beijing_time()}] [BARK] 通知发送成功")
-        else:
-            print(f"[{get_beijing_time()}] [BARK] 发送失败: {response.text}")
-    except Exception as e:
-        print(f"[{get_beijing_time()}] [BARK] 异常: {str(e)}")
-
-
-def get_orders_pending(trade_api):
+def get_orders_pending(trade_api, account_prefix=""):
     """获取当前账户下所有未成交订单信息"""
     try:
         # 使用Trade API的内部请求方法
@@ -286,15 +264,13 @@ def process_account_trading(account_index, signal, entry_price, amp_info):
         print(f"[{get_beijing_time()}] {prefix} [ERROR] 最终数量为0，放弃交易")
         
         # 发送失败通知
-        send_bark_notification(
+        notification_service.send_bark_notification(
             f"{prefix} 交易失败",
             f"计算数量为0，放弃交易\n"
-            f"账户: {suffix}\n"
-            f"原始计算值: {raw_size:.4f}\n"
-            f"四舍五入后: {size_rounded}\n"
-            f"标的: {INST_ID}\n"
-            f"入场价: {entry_price:.4f}\n"
-            f"保证金: {MARGIN} USDT"
+            f"入场价格: {entry_price:.4f}\n"
+            f"保证金: {MARGIN} USDT\n"
+            f"杠杆: {LEVERAGE}倍",
+            group="OKX自动交易通知"
         )
         return
     
@@ -376,7 +352,7 @@ def process_account_trading(account_index, signal, entry_price, amp_info):
     if not success:
         message += f"\n\n⚠️ 下单失败 ⚠️\n错误: {error_msg}"
     
-    send_bark_notification(title, message)
+    notification_service.send_notification(title, message)
 
     # 日志输出
     print(f"[{get_beijing_time()}] {prefix} [SIGNAL] {signal}@{entry_price:.4f}")
@@ -448,7 +424,7 @@ def get_kline_data():
             f"总振幅: {amp_info['total_range_perc']:.2f}%\n"
             f"条件: {amp_info['condition']}"
         )
-        send_bark_notification(title, message)
+        notification_service.send_notification(title, message)
         print(f"[{get_beijing_time()}] [AMPLITUDE] 发送振幅预警通知")
     
     return signal, entry_price, amp_info

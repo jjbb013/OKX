@@ -10,6 +10,7 @@ import requests
 import logging
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from notification_service import notification_service
 
 # 配置日志
 logging.basicConfig(
@@ -55,9 +56,6 @@ SYMBOLS = {
         "lower_threshold": -1.0
     },
 }
-
-# Bark 推送配置
-BARK_API_KEY = 'oZaeqGLJzRLSxW7dJqeACn'  # 替换为你的 Bark API Key
 
 def get_kline(symbol, interval="1m", limit=1):
     """获取OKX的最新1根K线数据"""
@@ -111,29 +109,6 @@ def calculate_amplitude(kline):
     amplitude = ((latest_price - open_price) / open_price) * 100
     return round(amplitude, 2)
 
-def send_bark_notification(title, content):
-    """通过Bark发送通知"""
-    if not BARK_API_KEY:
-        logging.warning("Bark API密钥未配置")
-        return
-
-    url = f"https://api.day.app/{BARK_API_KEY}"
-    payload = {
-        "title": title,
-        "body": content
-    }
-    proxies = {}  # 显式禁用代理
-
-    try:
-        response = requests.post(
-            url,
-            json=payload
-        )
-        response.raise_for_status()
-        logging.info(f"Bark 通知发送成功: {title}")
-    except requests.exceptions.RequestException as e:
-        logging.error(f"Bark 推送失败: {e}")
-
 def monitor_single_symbol(symbol_key, config):
     """监控单个标的的振幅"""
     symbol_name = config["symbol"]
@@ -157,15 +132,13 @@ def monitor_single_symbol(symbol_key, config):
 
     # 判断振幅是否超过阈值（正负两个方向）
     if amplitude > upper_threshold or amplitude < lower_threshold:
-        title = f"⚠️ {symbol_name} 振幅预警"
-        content = (
-            f"当前振幅: {amplitude}%\n"
-            f"阈值: {upper_threshold}%\n"
-            f"时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
-            f"开盘价: {kline[1]}\n"
-            f"最新价: {kline[4]}"
+        notification_service.send_amplitude_alert(
+            symbol=symbol_name,
+            amplitude=amplitude,
+            threshold=upper_threshold,
+            open_price=kline[1],
+            latest_price=kline[4]
         )
-        send_bark_notification(title, content)
     else:
         logging.info(f"{symbol_name} 振幅未超过阈值 ({amplitude}% <= {upper_threshold}% and {amplitude}% >= {lower_threshold}%)")
 

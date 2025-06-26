@@ -10,6 +10,7 @@ import time
 from datetime import datetime, timezone, timedelta
 import okx.MarketData as MarketData
 import okx.Trade as Trade
+from notification_service import notification_service
 
 # ============== 可配置参数区域 ==============
 # 环境变量账户后缀，支持多账号 (如OKX_API_KEY1, OKX_SECRET_KEY1, OKX_PASSPHRASE1)
@@ -22,15 +23,11 @@ MONITOR_INST_IDS = [
     # 可以添加更多交易标的
 ]
 
-# Bark通知配置
-BARK_KEY = os.getenv("BARK_KEY")
-BARK_GROUP = os.getenv("BARK_GROUP", "OKX委托监控")
-
 # 网络请求重试配置
 MAX_RETRIES = 3  # 最大重试次数
 RETRY_DELAY = 2  # 重试间隔(秒)
 
-# 价格比较容差（避免因微小价格差异导致的误判）
+# 价格比较容差（避免因微小价格波动导致的误判）
 PRICE_TOLERANCE = 0.0001  # 0.01%的容差
 
 # ==========================================
@@ -39,38 +36,6 @@ def get_beijing_time():
     """获取北京时间"""
     beijing_tz = timezone(timedelta(hours=8))
     return datetime.now(beijing_tz).strftime("%Y-%m-%d %H:%M:%S")
-
-def send_bark_notification(title, message):
-    """发送Bark通知"""
-    if not BARK_KEY:
-        print(f"[{get_beijing_time()}] [ERROR] 缺少BARK_KEY配置")
-        return
-
-    payload = {
-        'title': title,
-        'body': message,
-        'group': BARK_GROUP,
-        'sound': 'minuet'
-    }
-    headers = {'Content-Type': 'application/json'}
-
-    for attempt in range(MAX_RETRIES + 1):
-        try:
-            import requests
-            response = requests.post(BARK_KEY, json=payload, headers=headers, timeout=10)
-            if response.status_code == 200:
-                print(f"[{get_beijing_time()}] [BARK] 通知发送成功")
-                return
-            else:
-                print(f"[{get_beijing_time()}] [BARK] 发送失败: {response.text}")
-        except Exception as e:
-            print(f"[{get_beijing_time()}] [BARK] 异常 (尝试 {attempt+1}/{MAX_RETRIES+1}): {str(e)}")
-            
-        if attempt < MAX_RETRIES:
-            print(f"[{get_beijing_time()}] [BARK] 重试中... ({attempt+1}/{MAX_RETRIES})")
-            time.sleep(RETRY_DELAY)
-    
-    print(f"[{get_beijing_time()}] [BARK] 所有尝试失败")
 
 def get_current_price(market_api, inst_id, account_prefix=""):
     """获取指定交易标的的当前最新价格"""
@@ -284,18 +249,17 @@ def process_account_orders(account_suffix):
                     })
                     
                     # 发送撤销通知
-                    title = f"委托订单已撤销 - {inst_id}"
-                    message = (
-                        f"账户: {account_name}\n"
-                        f"交易标的: {inst_id}\n"
-                        f"订单ID: {order['ordId']}\n"
-                        f"方向: {order['side']} {order.get('posSide', '')}\n"
-                        f"委托价格: {order['px']}\n"
-                        f"止盈价格: {take_profit_price:.4f}\n"
-                        f"当前价格: {current_price:.4f}\n"
-                        f"撤销原因: {reason}"
+                    notification_service.send_order_cancel_notification(
+                        account_name=account_name,
+                        inst_id=inst_id,
+                        ord_id=order['ordId'],
+                        side=order['side'],
+                        pos_side=order.get('posSide', ''),
+                        order_price=float(order['px']),
+                        take_profit_price=take_profit_price,
+                        current_price=current_price,
+                        reason=reason
                     )
-                    send_bark_notification(title, message)
                 else:
                     print(f"[{get_beijing_time()}] {prefix} [ERROR] 订单{order['ordId']}撤销失败: {cancel_msg}")
     
@@ -337,7 +301,7 @@ def send_summary_notification(results):
         message += f"总监控订单数: {total_orders}"
         
         print(f"[{get_beijing_time()}] [SUMMARY] {message}")
-        send_bark_notification(title, message)
+        notification_service.send_summary_notification(results, total_canceled)
     else:
         # 没有撤销委托时，只打印日志，不发送Bark通知
         print(f"[{get_beijing_time()}] [SUMMARY] 监控完成，无撤销委托")

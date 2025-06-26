@@ -14,6 +14,7 @@ import time
 from datetime import datetime, timezone, timedelta
 import okx.MarketData as MarketData
 import okx.Trade as Trade
+from notification_service import notification_service
 
 # ============== 可配置参数区域 ==============
 # 交易标的参数
@@ -36,10 +37,6 @@ STOP_LOSS_PERCENT = 0.019  # 止损比例(1.9%)
 # 环境变量账户后缀，支持多账号 (如OKX_API_KEY1, OKX_SECRET_KEY1, OKX_PASSPHRASE1)
 ACCOUNT_SUFFIXES = ["", "1", "2", "3"]  # 空字符串代表无后缀的默认账号
 
-# Bark通知配置
-BARK_KEY = os.getenv("BARK_KEY")
-BARK_GROUP = os.getenv("BARK_GROUP", "OKX自动交易通知")
-
 # 前缀生成配置
 PREFIX = "ETH"  # 使用标的名称作为前缀(如ETH)
 
@@ -53,38 +50,6 @@ def get_beijing_time():
     """获取北京时间"""
     beijing_tz = timezone(timedelta(hours=8))
     return datetime.now(beijing_tz).strftime("%Y-%m-%d %H:%M:%S")
-
-
-def send_bark_notification(title, message):
-    """发送Bark通知"""
-    if not BARK_KEY:
-        print(f"[{get_beijing_time()}] [ERROR] 缺少BARK_KEY配置")
-        return
-
-    payload = {
-        'title': title,
-        'body': message,
-        'group': BARK_GROUP,
-        'sound': 'minuet'
-    }
-    headers = {'Content-Type': 'application/json'}
-
-    for attempt in range(MAX_RETRIES + 1):
-        try:
-            response = requests.post(BARK_KEY, json=payload, headers=headers, timeout=10)
-            if response.status_code == 200:
-                print(f"[{get_beijing_time()}] [BARK] 通知发送成功")
-                return
-            else:
-                print(f"[{get_beijing_time()}] [BARK] 发送失败: {response.text}")
-        except Exception as e:
-            print(f"[{get_beijing_time()}] [BARK] 异常 (尝试 {attempt+1}/{MAX_RETRIES+1}): {str(e)}")
-            
-        if attempt < MAX_RETRIES:
-            print(f"[{get_beijing_time()}] [BARK] 重试中... ({attempt+1}/{MAX_RETRIES})")
-            time.sleep(RETRY_DELAY)
-    
-    print(f"[{get_beijing_time()}] [BARK] 所有尝试失败")
 
 
 def get_orders_pending(trade_api, account_prefix=""):
@@ -354,22 +319,18 @@ def process_account_trading(account_suffix, signal, entry_price, amp_info):
                 print(f"[{get_beijing_time()}] {account_prefix} [ORDER] 所有尝试失败")
     
     # 发送交易通知
-    title = f"交易信号: {signal} @ {INST_ID}"
-    message = (
-        f"账户: {account_prefix}\n"
-        f"信号类型: {signal}\n"
-        f"入场价格: {entry_price:.4f}\n"
-        f"委托数量: {size}\n"
-        f"保证金: {MARGIN} USDT\n"
-        f"止盈价: {take_profit_price:.4f} ({TAKE_PROFIT_PERCENT * 100:.2f}%)\n"
-        f"止损价: {stop_loss_price:.4f} ({STOP_LOSS_PERCENT * 100:.2f}%)"
+    notification_service.send_trading_notification(
+        account_name=account_prefix,
+        inst_id=INST_ID,
+        signal_type=signal,
+        entry_price=entry_price,
+        size=size,
+        margin=MARGIN,
+        take_profit_price=take_profit_price,
+        stop_loss_price=stop_loss_price,
+        success=success,
+        error_msg=error_msg
     )
-    
-    # 如果下单失败，添加错误信息
-    if not success:
-        message += f"\n\n⚠️ 下单失败 ⚠️\n错误: {error_msg}"
-    
-    send_bark_notification(title, message)
 
     # 日志输出
     print(f"[{get_beijing_time()}] {account_prefix} [SIGNAL] {signal}@{entry_price:.4f}")
@@ -443,15 +404,13 @@ def get_kline_data():
 
     # 满足振幅条件时发送通知
     if amp_info['in_range1'] or amp_info['in_range2']:
-        title = f"振幅预警! {INST_ID} 实体变动: {amp_info['body_change_perc']:.2f}%"
-        message = (
-            f"时间: {get_beijing_time()}\n"
-            f"开盘: {amp_info['open']:.4f}\n"
-            f"收盘: {amp_info['close']:.4f}\n"
-            f"总振幅: {amp_info['total_range_perc']:.2f}%\n"
-            f"条件: {amp_info['condition']}"
+        notification_service.send_amplitude_alert(
+            symbol=INST_ID,
+            amplitude=amp_info['body_change_perc'],
+            threshold=RANGE2_THRESHOLD,
+            open_price=amp_info['open'],
+            latest_price=amp_info['close']
         )
-        send_bark_notification(title, message)
         print(f"[{get_beijing_time()}] [AMPLITUDE] 发送振幅预警通知")
     
     return signal, entry_price, amp_info
