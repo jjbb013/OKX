@@ -18,7 +18,7 @@ ACCOUNT_SUFFIXES = ["", "1", "2", "3"]  # 空字符串代表无后缀的默认�
 # 监控的交易标的列表
 MONITOR_INST_IDS = [
     "ETH-USDT-SWAP",
-    "BTC-USDT-SWAP",
+    "VINE-USDT-SWAP",
     # 可以添加更多交易标的
 ]
 
@@ -301,27 +301,36 @@ def send_summary_notification(results):
     total_canceled = sum(r['canceled_count'] for r in results)
     total_orders = sum(r['total_orders'] for r in results)
     
-    title = f"委托监控结果: {total_canceled}个订单已撤销"
-    message = f"监控时间: {get_beijing_time()}\n\n"
-    
-    for result in results:
-        status = "✅ 成功" if result['success'] else "❌ 失败"
-        message += f"账户: {result['account_name']}\n"
-        message += f"状态: {status}\n"
-        if result['success']:
-            message += f"总订单数: {result['total_orders']}\n"
-            message += f"撤销订单数: {result['canceled_count']}\n"
-        else:
-            message += f"错误: {result['error']}\n"
-        message += "\n"
-    
-    message += f"总账户数: {total_accounts}\n"
-    message += f"成功账户数: {success_accounts}\n"
-    message += f"总撤销订单数: {total_canceled}\n"
-    message += f"总监控订单数: {total_orders}"
-    
-    print(f"[{get_beijing_time()}] [SUMMARY] {message}")
-    send_bark_notification(title, message)
+    # 只在有撤销委托时才发送Bark通知
+    if total_canceled > 0:
+        title = f"委托监控结果: {total_canceled}个订单已撤销"
+        message = f"监控时间: {get_beijing_time()}\n\n"
+        
+        for result in results:
+            status = "✅ 成功" if result['success'] else "❌ 失败"
+            message += f"账户: {result['account_name']}\n"
+            message += f"状态: {status}\n"
+            if result['success']:
+                message += f"总订单数: {result['total_orders']}\n"
+                message += f"撤销订单数: {result['canceled_count']}\n"
+            else:
+                message += f"错误: {result['error']}\n"
+            message += "\n"
+        
+        message += f"总账户数: {total_accounts}\n"
+        message += f"成功账户数: {success_accounts}\n"
+        message += f"总撤销订单数: {total_canceled}\n"
+        message += f"总监控订单数: {total_orders}"
+        
+        print(f"[{get_beijing_time()}] [SUMMARY] {message}")
+        send_bark_notification(title, message)
+    else:
+        # 没有撤销委托时，只打印日志，不发送Bark通知
+        print(f"[{get_beijing_time()}] [SUMMARY] 监控完成，无撤销委托")
+        print(f"[{get_beijing_time()}] [SUMMARY] 总账户数: {total_accounts}")
+        print(f"[{get_beijing_time()}] [SUMMARY] 成功账户数: {success_accounts}")
+        print(f"[{get_beijing_time()}] [SUMMARY] 总撤销订单数: {total_canceled}")
+        print(f"[{get_beijing_time()}] [SUMMARY] 总监控订单数: {total_orders}")
 
 if __name__ == "__main__":
     print(f"[{get_beijing_time()}] [INFO] 开始OKX委托订单监控")
