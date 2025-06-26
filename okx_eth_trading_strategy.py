@@ -56,8 +56,8 @@ def get_orders_pending(trade_api, account_prefix=""):
     """获取当前账户下所有未成交订单信息"""
     for attempt in range(MAX_RETRIES + 1):
         try:
-            # 使用Trade API的内部请求方法
-            result = trade_api.get_order_list(instId=INST_ID)
+            # 使用Trade API的内部请求方法，只获取未成交订单
+            result = trade_api.get_order_list(instId=INST_ID, state="live")
             
             if result and 'code' in result and result['code'] == '0' and 'data' in result:
                 print(f"[{get_beijing_time()}] {account_prefix} [ORDERS] 成功获取{len(result['data'])}个未成交订单")
@@ -79,27 +79,34 @@ def get_orders_pending(trade_api, account_prefix=""):
 def get_pending_open_orders(trade_api, account_prefix=""):
     """
     获取需要撤销的开仓订单列表
-    根据要求：linkedAlgoOrd为空时需要撤销
+    撤销所有相同标的的未成交限价开仓订单
     """
     try:
         # 获取所有未成交订单
         all_pending_orders = get_orders_pending(trade_api, account_prefix)
         
-        # 过滤出需要撤销的订单
+        # 过滤出需要撤销的订单：相同标的的限价开仓订单
         cancel_orders = []
         for order in all_pending_orders:
-            # 检查linkedAlgoOrd字段 - 如果为空，说明是开仓订单需要撤销
-            linked_algo = order.get('linkedAlgoOrd', {})
-            algo_id = linked_algo.get('algoId', '')
+            # 检查订单类型和方向
+            ord_type = order.get('ordType', '')
+            side = order.get('side', '')
+            pos_side = order.get('posSide', '')
             
-            # 如果linkedAlgoOrd为空或者algoId为空字符串，则此订单需要撤销
-            if not linked_algo or algo_id == '':
+            # 撤销条件：限价订单 + 开仓订单（买入做多或卖出做空）
+            is_limit_order = ord_type == 'limit'
+            is_open_order = (
+                (side == 'buy' and pos_side == 'long') or  # 买入做多
+                (side == 'sell' and pos_side == 'short')   # 卖出做空
+            )
+            
+            if is_limit_order and is_open_order:
                 cancel_orders.append({
                     "instId": INST_ID,
                     "ordId": order['ordId']
                 })
                 
-                print(f"[{get_beijing_time()}] {account_prefix} [TO_CANCEL] 标记为待撤销: ordId={order['ordId']}, linkedAlgoOrd={'空' if algo_id == '' else '非空'}")
+                print(f"[{get_beijing_time()}] {account_prefix} [TO_CANCEL] 标记为待撤销: ordId={order['ordId']}, side={side}, posSide={pos_side}, ordType={ord_type}")
         
         return cancel_orders
     except Exception as e:
@@ -141,6 +148,9 @@ def cancel_pending_open_orders(trade_api, account_prefix=""):
                     print(f"[{get_beijing_time()}] {account_prefix} [CANCEL] 部分订单撤销失败: {json.dumps(failed_orders)}")
                 else:
                     print(f"[{get_beijing_time()}] {account_prefix} [CANCEL] 所有{len(cancel_orders)}个订单撤销成功")
+                    # 撤销成功后等待一段时间确保撤销操作完成
+                    print(f"[{get_beijing_time()}] {account_prefix} [CANCEL] 等待2秒确保撤销操作完成...")
+                    time.sleep(2)
                     return True
             else:
                 error_msg = result.get('msg', '') if result else '无响应'
