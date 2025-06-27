@@ -148,32 +148,26 @@ def get_current_price(market_api, inst_id, account_prefix=""):
 
 
 def format_balance_info(balances, account_prefix=""):
-    """格式化余额信息"""
+    """格式化余额信息，显示总资产估值（USDT和CNY）和每币种折算"""
     if not balances:
         return "无余额信息"
-    
-    balance_info = []
-    total_usdt = 0.0
-    
-    for balance in balances:
-        ccy = balance.get('ccy', '')
-        bal = float(balance.get('bal', '0'))
-        avail_bal = float(balance.get('availBal', '0'))
-        frozen_bal = float(balance.get('frozenBal', '0'))
-        
-        if bal > 0:  # 只显示有余额的币种
-            if ccy == 'USDT':
-                total_usdt += bal
-                status = "⚠️ 余额不足" if bal < MIN_BALANCE_THRESHOLD else "✅ 正常"
-            else:
-                status = "✅ 正常"
-            
-            balance_info.append(f"  {ccy}: {bal:.4f} (可用: {avail_bal:.4f}, 冻结: {frozen_bal:.4f}) {status}")
-    
-    if balance_info:
-        balance_info.insert(0, f"总USDT余额: {total_usdt:.2f}")
-    
-    return "\n".join(balance_info) if balance_info else "无有效余额"
+
+    # OKX返回的balances是一个列表，通常只有一个元素，里面有totalEq、details等
+    main_info = balances[0] if isinstance(balances, list) and balances else balances
+    total_usdt = float(main_info.get('totalEq', 0))
+    total_cny = float(main_info.get('totalCnyEq', 0)) if 'totalCnyEq' in main_info else None
+    details = main_info.get('details', [])
+
+    lines = [f"总资产估值: {total_usdt:.2f} USDT" + (f" / {total_cny:.2f} CNY" if total_cny else "")]
+    lines.append("币种明细:")
+    for d in details:
+        ccy = d.get('ccy', '')
+        bal = float(d.get('bal', '0'))
+        eq_usd = float(d.get('eqUsd', 0)) if 'eqUsd' in d else 0
+        eq_cny = float(d.get('eqCny', 0)) if 'eqCny' in d else 0
+        if bal > 0 or eq_usd > 0:
+            lines.append(f"  {ccy}: {bal:.4f} ≈ {eq_usd:.2f} USDT / {eq_cny:.2f} CNY")
+    return "\n".join(lines)
 
 
 def format_position_info(positions, account_prefix=""):
