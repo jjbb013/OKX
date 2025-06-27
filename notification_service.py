@@ -14,9 +14,15 @@ class NotificationService:
     
     def __init__(self):
         """初始化通知服务"""
-        # Bark配置
-        self.bark_key = os.getenv("BARK_KEY")
-        self.bark_group = os.getenv("BARK_GROUP", "OKX通知")
+        # 尝试从本地配置文件读取Bark配置，如果不存在则使用环境变量
+        try:
+            from config_local import BARK_KEY, BARK_GROUP
+            self.bark_key = BARK_KEY
+            self.bark_group = BARK_GROUP
+        except ImportError:
+            # 从环境变量读取
+            self.bark_key = os.getenv("BARK_KEY")
+            self.bark_group = os.getenv("BARK_GROUP", "OKX通知")
         
         # 网络请求配置
         self.max_retries = 3

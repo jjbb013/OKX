@@ -63,20 +63,21 @@ def init_api(account_suffix=""):
     secret_key = get_env_var("OKX_SECRET_KEY", suffix)
     passphrase = get_env_var("OKX_PASSPHRASE", suffix)
     flag = get_env_var("OKX_FLAG", suffix) or "0"
+    account_name = get_env_var("OKX_ACCOUNT_NAME", suffix) or f"账户{suffix}" if suffix else "默认账户"
     
     if not all([api_key, secret_key, passphrase]):
         print(f"[{get_beijing_time()}] {account_prefix} [ERROR] 账户信息不完整")
-        return None, None, None, account_prefix
+        return None, None, None, account_prefix, account_name
     
     try:
         account_api = Account.AccountAPI(api_key, secret_key, passphrase, False, flag)
         trade_api = Trade.TradeAPI(api_key, secret_key, passphrase, False, flag)
         market_api = MarketData.MarketAPI(api_key, secret_key, passphrase, False, flag)
-        print(f"[{get_beijing_time()}] {account_prefix} API初始化成功")
-        return account_api, trade_api, market_api, account_prefix
+        print(f"[{get_beijing_time()}] {account_prefix} API初始化成功 - {account_name}")
+        return account_api, trade_api, market_api, account_prefix, account_name
     except Exception as err:  # pylint: disable=broad-except
         print(f"[{get_beijing_time()}] {account_prefix} [ERROR] API初始化失败: {str(err)}")
-        return None, None, None, account_prefix
+        return None, None, None, account_prefix, account_name
 
 
 def get_account_balance(account_api, account_prefix=""):
@@ -221,7 +222,7 @@ def format_order_info(orders, account_prefix=""):
 
 def check_account_assets(account_suffix=""):
     """检查单个账户资产"""
-    account_api, trade_api, market_api, account_prefix = init_api(account_suffix)
+    account_api, trade_api, market_api, account_prefix, account_name = init_api(account_suffix)
     
     if not account_api:
         return None
@@ -243,6 +244,7 @@ def check_account_assets(account_suffix=""):
     # 汇总信息
     account_summary = {
         "account_prefix": account_prefix,
+        "account_name": account_name,
         "balances": balances,
         "positions": positions,
         "orders": orders,
@@ -273,39 +275,85 @@ def send_summary_notification(all_accounts):
         
         total_accounts = len(all_accounts)
         total_usdt = 0.0
+        total_cny = 0.0
         total_pnl = 0.0
         total_orders = 0
         
-        summary_lines = []
+        # 收集各账户信息
+        account_details = []
         
         for account in all_accounts:
             if account:
                 account_prefix = account["account_prefix"]
+                account_name = account["account_name"]
                 
-                # 计算USDT余额
-                usdt_balance = 0.0
-                for balance in account["balances"]:
-                    if balance.get('ccy') == 'USDT':
-                        usdt_balance += float(balance.get('bal', '0'))
-                        break
+                # 计算总资产估值
+                account_usdt = 0.0
+                account_cny = 0.0
+                if account["balances"]:
+                    main_info = account["balances"][0]
+                    account_usdt = float(main_info.get('totalEq', 0))
+                    account_cny = float(main_info.get('totalCnyEq', 0)) if 'totalCnyEq' in main_info else 0
                 
                 # 计算总PnL
                 account_pnl = sum(float(pos.get('upl', '0')) for pos in account["positions"])
                 
-                total_usdt += usdt_balance
+                total_usdt += account_usdt
+                total_cny += account_cny
                 total_pnl += account_pnl
                 total_orders += len(account["orders"])
                 
-                summary_lines.append(f"{account_prefix}: {usdt_balance:.2f} USDT, PnL: {account_pnl:.2f}")
+                account_details.append({
+                    "prefix": account_prefix,
+                    "name": account_name,
+                    "usdt": account_usdt,
+                    "cny": account_cny,
+                    "pnl": account_pnl,
+                    "positions": account["positions"],
+                    "orders": account["orders"]
+                })
         
-        title = f"账户资产检查 - {total_accounts}个账户"
-        message = f"检查时间: {get_beijing_time()}\n\n"
-        message += f"总USDT余额: {total_usdt:.2f}\n"
-        message += f"总PnL: {total_pnl:.2f}\n"
-        message += f"总未成交订单: {total_orders}\n\n"
-        message += "各账户详情:\n" + "\n".join(summary_lines)
+        # 构建通知消息
+        title = f"💰 账户资产检查 - {total_accounts}个账户"
         
-        notification_service.send_bark_notification(title, message, group="OKX资产监控")
+        message_lines = []
+        
+        # 1. 账户资产估值
+        message_lines.append("📊 账户资产估值:")
+        for detail in account_details:
+            cny_info = f" / {detail['cny']:.2f} CNY" if detail['cny'] > 0 else ""
+            message_lines.append(f"  {detail['prefix']} - {detail['name']}: {detail['usdt']:.2f} USDT{cny_info}")
+        message_lines.append(f"  总计: {total_usdt:.2f} USDT" + (f" / {total_cny:.2f} CNY" if total_cny > 0 else ""))
+        message_lines.append("")
+        
+        # 2. 持仓状态
+        message_lines.append("📈 持仓状态:")
+        has_positions = any(len(detail['positions']) > 0 for detail in account_details)
+        if has_positions:
+            for detail in account_details:
+                if detail['positions']:
+                    pnl_status = "📈 盈利" if detail['pnl'] > 0 else "📉 亏损" if detail['pnl'] < 0 else "➖ 持平"
+                    message_lines.append(f"  {detail['prefix']} - {detail['name']}: {detail['pnl']:.2f} USDT {pnl_status}")
+        else:
+            message_lines.append("  无持仓")
+        message_lines.append("")
+        
+        # 3. 未成交订单
+        message_lines.append("📋 未成交订单:")
+        if total_orders > 0:
+            for detail in account_details:
+                if detail['orders']:
+                    message_lines.append(f"  {detail['prefix']} - {detail['name']}: {len(detail['orders'])}个订单")
+        else:
+            message_lines.append("  无未成交订单")
+        message_lines.append("")
+        
+        # 4. 检查时间
+        message_lines.append(f"⏰ 检查时间: {get_beijing_time()}")
+        
+        message = "\n".join(message_lines)
+        
+        notification_service.send_bark_notification(title, message, group="账户资产检查")
         print(f"[{get_beijing_time()}] [NOTIFICATION] 资产摘要通知已发送")
         
     except ImportError:

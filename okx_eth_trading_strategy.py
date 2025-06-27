@@ -16,6 +16,15 @@ import okx.MarketData as MarketData
 import okx.Trade as Trade
 from notification_service import notification_service
 
+# 尝试导入本地配置，如果不存在则使用环境变量
+try:
+    from config_local import *
+    print("[INFO] 使用本地配置文件")
+    IS_DEVELOPMENT = True
+except ImportError:
+    print("[INFO] 使用环境变量配置")
+    IS_DEVELOPMENT = False
+
 # ============== 可配置参数区域 ==============
 # 交易标的参数
 INST_ID = "ETH-USDT-SWAP"  # 交易标的
@@ -50,6 +59,19 @@ def get_beijing_time():
     """获取北京时间"""
     beijing_tz = timezone(timedelta(hours=8))
     return datetime.now(beijing_tz).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def get_env_var(var_name, suffix="", default=None):
+    """获取环境变量或本地配置变量"""
+    if IS_DEVELOPMENT:
+        # 开发环境：从本地配置文件获取
+        try:
+            return globals()[f"{var_name}{suffix}"]
+        except KeyError:
+            return default
+    else:
+        # 生产环境：从环境变量获取
+        return os.getenv(f"{var_name}{suffix}", default)
 
 
 def get_orders_pending(trade_api, account_prefix=""):
@@ -236,16 +258,17 @@ def generate_clord_id(prefix):
 
 
 def process_account_trading(account_suffix, signal, entry_price, amp_info):
-    """为单个账户执行交易操作"""
+    """处理单个账户的交易逻辑"""
     # 准备账户前缀标识
     suffix = account_suffix if account_suffix else ""  # 空后缀对应默认账户
     account_prefix = f"[ACCOUNT-{suffix}]" if suffix else "[ACCOUNT]"
     
     # 从环境变量获取账户信息
-    api_key = os.getenv(f"OKX_API_KEY{suffix}")
-    secret_key = os.getenv(f"OKX_SECRET_KEY{suffix}")
-    passphrase = os.getenv(f"OKX_PASSPHRASE{suffix}")
-    flag = os.getenv(f"OKX_FLAG{suffix}", "0")  # 默认实盘
+    api_key = get_env_var("OKX_API_KEY", suffix)
+    secret_key = get_env_var("OKX_SECRET_KEY", suffix)
+    passphrase = get_env_var("OKX_PASSPHRASE", suffix)
+    flag = get_env_var("OKX_FLAG", suffix, "0")  # 默认实盘
+    account_name = get_env_var("OKX_ACCOUNT_NAME", suffix) or f"账户{suffix}" if suffix else "默认账户"
     
     if not all([api_key, secret_key, passphrase]):
         print(f"[{get_beijing_time()}] {account_prefix} [ERROR] 账户信息不完整或未配置")
@@ -254,7 +277,7 @@ def process_account_trading(account_suffix, signal, entry_price, amp_info):
     # 初始化API
     try:
         trade_api = Trade.TradeAPI(api_key, secret_key, passphrase, False, flag)
-        print(f"[{get_beijing_time()}] {account_prefix} API初始化成功")
+        print(f"[{get_beijing_time()}] {account_prefix} API初始化成功 - {account_name}")
     except Exception as e:
         print(f"[{get_beijing_time()}] {account_prefix} [ERROR] API初始化失败: {str(e)}")
         return
@@ -330,7 +353,7 @@ def process_account_trading(account_suffix, signal, entry_price, amp_info):
     
     # 发送交易通知
     notification_service.send_trading_notification(
-        account_name=account_prefix,
+        account_name=account_name,
         inst_id=INST_ID,
         signal_type=signal,
         entry_price=entry_price,
@@ -352,10 +375,10 @@ def get_kline_data():
     """获取并分析K线数据"""
     # 使用第一个账户的环境变量初始化市场API
     suffix = ACCOUNT_SUFFIXES[0] if ACCOUNT_SUFFIXES else ""
-    api_key = os.getenv(f"OKX_API_KEY{suffix}")
-    secret_key = os.getenv(f"OKX_SECRET_KEY{suffix}")
-    passphrase = os.getenv(f"OKX_PASSPHRASE{suffix}")
-    flag = os.getenv(f"OKX_FLAG{suffix}", "0")  # 默认实盘
+    api_key = get_env_var("OKX_API_KEY", suffix)
+    secret_key = get_env_var("OKX_SECRET_KEY", suffix)
+    passphrase = get_env_var("OKX_PASSPHRASE", suffix)
+    flag = get_env_var("OKX_FLAG", suffix, "0")  # 默认实盘
     
     if not all([api_key, secret_key, passphrase]):
         print(f"[{get_beijing_time()}] [ERROR] 账户信息不完整，无法获取K线数据")

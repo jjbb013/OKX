@@ -12,6 +12,15 @@ import okx.MarketData as MarketData
 import okx.Trade as Trade
 from notification_service import notification_service
 
+# 尝试导入本地配置，如果不存在则使用环境变量
+try:
+    from config_local import *
+    print("[INFO] 使用本地配置文件")
+    IS_DEVELOPMENT = True
+except ImportError:
+    print("[INFO] 使用环境变量配置")
+    IS_DEVELOPMENT = False
+
 # ============== 可配置参数区域 ==============
 # 环境变量账户后缀，支持多账号 (如OKX_API_KEY1, OKX_SECRET_KEY1, OKX_PASSPHRASE1)
 ACCOUNT_SUFFIXES = ["", "1", "2", "3"]  # 空字符串代表无后缀的默认账号
@@ -36,6 +45,18 @@ def get_beijing_time():
     """获取北京时间"""
     beijing_tz = timezone(timedelta(hours=8))
     return datetime.now(beijing_tz).strftime("%Y-%m-%d %H:%M:%S")
+
+def get_env_var(var_name, suffix="", default=None):
+    """获取环境变量或本地配置变量"""
+    if IS_DEVELOPMENT:
+        # 开发环境：从本地配置文件获取
+        try:
+            return globals()[f"{var_name}{suffix}"]
+        except KeyError:
+            return default
+    else:
+        # 生产环境：从环境变量获取
+        return os.getenv(f"{var_name}{suffix}", default)
 
 def get_current_price(market_api, inst_id, account_prefix=""):
     """获取指定交易标的的当前最新价格"""
@@ -165,12 +186,11 @@ def process_account_orders(account_suffix):
     prefix = "[ACCOUNT-" + suffix_str + "]" if suffix_str else "[ACCOUNT]"
     
     # 从环境变量获取账户信息
-    api_key = os.getenv(f"OKX_API_KEY{suffix_str}")
-    secret_key = os.getenv(f"OKX_SECRET_KEY{suffix_str}")
-    passphrase = os.getenv(f"OKX_PASSPHRASE{suffix_str}")
-    flag = os.getenv(f"OKX_FLAG{suffix_str}", "0")  # 默认实盘
-    
-    account_name = f"账户-{suffix_str}" if suffix_str else "默认账户"
+    api_key = get_env_var("OKX_API_KEY", suffix=suffix_str)
+    secret_key = get_env_var("OKX_SECRET_KEY", suffix=suffix_str)
+    passphrase = get_env_var("OKX_PASSPHRASE", suffix=suffix_str)
+    flag = get_env_var("OKX_FLAG", suffix=suffix_str, default="0")  # 默认实盘
+    account_name = get_env_var("OKX_ACCOUNT_NAME", suffix=suffix_str) or f"账户{suffix_str}" if suffix_str else "默认账户"
     
     if not all([api_key, secret_key, passphrase]):
         print(f"[{get_beijing_time()}] {prefix} [ERROR] 账户信息不完整或未配置")
@@ -190,7 +210,7 @@ def process_account_orders(account_suffix):
         
         trade_api = Trade.TradeAPI(api_key, secret_key, passphrase, False, flag)
         market_api = MarketData.MarketAPI(api_key, secret_key, passphrase, False, flag)
-        print(f"[{get_beijing_time()}] {prefix} API初始化成功")
+        print(f"[{get_beijing_time()}] {prefix} API初始化成功 - {account_name}")
     except Exception as e:
         error_msg = f"API初始化失败: {str(e)}"
         print(f"[{get_beijing_time()}] {prefix} [ERROR] {error_msg}")
