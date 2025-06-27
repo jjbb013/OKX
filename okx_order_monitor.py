@@ -89,6 +89,7 @@ def get_pending_orders(trade_api, inst_id, account_prefix=""):
             
             if result and 'code' in result and result['code'] == '0' and 'data' in result:
                 orders = result['data']
+                print(f"[订单原始数据]{json.dumps(orders, indent=2, ensure_ascii=False)}")
                 print(f"[{get_beijing_time()}] {account_prefix} [ORDERS] {inst_id} 获取到{len(orders)}个未成交订单")
                 return orders
             else:
@@ -123,13 +124,21 @@ def should_cancel_order(order, current_price, account_prefix=""):
         
         # 获取止盈价格
         take_profit_price = None
-        linked_algo = order.get('linkedAlgoOrd', {})
-        if linked_algo and 'tpTriggerPx' in linked_algo:
-            take_profit_price = float(linked_algo['tpTriggerPx'])
-            print(f"[{get_beijing_time()}] {account_prefix} [CHECK] 订单{ord_id} 止盈价格: {take_profit_price}")
+
+        # 优先从 attachAlgoOrds 获取
+        attach_algo_ords = order.get('attachAlgoOrds', [])
+        if attach_algo_ords and isinstance(attach_algo_ords, list) and len(attach_algo_ords) > 0 and 'tpTriggerPx' in attach_algo_ords[0]:
+            take_profit_price = float(attach_algo_ords[0]['tpTriggerPx'])
+            print(f"[{get_beijing_time()}] {account_prefix} [CHECK] 订单{ord_id} 止盈价格: {take_profit_price} (attachAlgoOrds)")
         else:
-            print(f"[{get_beijing_time()}] {account_prefix} [CHECK] 订单{ord_id} 无止盈价格信息")
-            return False, "无止盈价格信息", None
+            # 兼容原有逻辑
+            linked_algo = order.get('linkedAlgoOrd', {})
+            if linked_algo and 'tpTriggerPx' in linked_algo:
+                take_profit_price = float(linked_algo['tpTriggerPx'])
+                print(f"[{get_beijing_time()}] {account_prefix} [CHECK] 订单{ord_id} 止盈价格: {take_profit_price} (linkedAlgoOrd)")
+            else:
+                print(f"[{get_beijing_time()}] {account_prefix} [CHECK] 订单{ord_id} 无止盈价格信息")
+                return False, "无止盈价格信息", None
         
         # 判断是否需要撤销
         should_cancel = False
