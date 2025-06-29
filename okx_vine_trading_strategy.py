@@ -65,12 +65,22 @@ def get_env_var(var_name, suffix="", default=None):
     if IS_DEVELOPMENT:
         # 开发环境：从本地配置文件获取
         try:
-            return globals()[f"{var_name}{suffix}"]
+            value = globals()[f"{var_name}{suffix}"]
+            if value is None or value == "":
+                print(f"[DEBUG] 本地配置 {var_name}{suffix} 为空或None")
+                return default
+            return value
         except KeyError:
+            print(f"[DEBUG] 本地配置 {var_name}{suffix} 不存在")
             return default
     else:
         # 生产环境：从环境变量获取
-        return os.getenv(f"{var_name}{suffix}", default)
+        env_var_name = f"{var_name}{suffix}"
+        value = os.getenv(env_var_name, default)
+        if value is None or value == "":
+            print(f"[DEBUG] 环境变量 {env_var_name} 为空或None")
+            return default
+        return value
 
 
 def get_orders_pending(trade_api):
@@ -228,12 +238,22 @@ def process_account_trading(account_index, signal, entry_price):
     api_key = get_env_var("OKX_API_KEY", suffix)
     secret_key = get_env_var("OKX_SECRET_KEY", suffix)
     passphrase = get_env_var("OKX_PASSPHRASE", suffix)
-    flag = get_env_var("OKX_FLAG", suffix, "0")  # 默认实盘
+    # 对于flag，如果没有后缀，使用默认的OKX_FLAG，否则使用带后缀的
+    flag = get_env_var("OKX_FLAG", suffix, "0") if suffix else get_env_var("OKX_FLAG", "", "0")
     account_name = get_env_var("OKX_ACCOUNT_NAME", suffix) or f"账户{suffix}" if suffix else "默认账户"
     
     if not all([api_key, secret_key, passphrase]):
         print(f"[{get_beijing_time()}] {prefix} [ERROR] 账户信息不完整或未配置")
         return
+    
+    # 确保所有值都是字符串类型
+    if not isinstance(api_key, str) or not isinstance(secret_key, str) or not isinstance(passphrase, str):
+        print(f"[{get_beijing_time()}] {prefix} [ERROR] API密钥信息格式错误")
+        return
+    
+    # 确保flag是字符串类型
+    if not isinstance(flag, str):
+        flag = "0"
     
     # 初始化API
     try:
@@ -371,12 +391,20 @@ def get_kline_data():
         print(f"[{get_beijing_time()}] [ERROR] 默认账户信息缺失，无法获取K线数据")
         return None, None, None
     
+    # 确保所有值都是字符串类型
+    if not isinstance(default_api_key, str) or not isinstance(default_secret_key, str) or not isinstance(default_passphrase, str):
+        print(f"[{get_beijing_time()}] [ERROR] API密钥信息格式错误")
+        return None, None, None
+    
+    # 确保flag是字符串类型
+    if not isinstance(flag, str):
+        flag = "0"
+    
     # 初始化API
     try:
         market_api = MarketData.MarketAPI(
             default_api_key, default_secret_key, default_passphrase, False, flag
         )
-        market_api.OK_ACCESS_TIMESTAMP = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%fZ")
         print(f"[{get_beijing_time()}] [MARKET] K线API初始化成功")
     except Exception as e:
         print(f"[{get_beijing_time()}] [ERROR] K线API初始化失败: {str(e)}")
@@ -444,7 +472,7 @@ if __name__ == "__main__":
     
     # 2. 遍历所有账户执行交易
     print(f"[{get_beijing_time()}] [ACCOUNTS] 开始处理所有账户交易")
-    for suffix in ACCOUNT_SUFFIXES:
-        process_account_trading(suffix, signal, entry_price)
+    for account_index in range(len(ACCOUNT_SUFFIXES)):
+        process_account_trading(account_index, signal, entry_price)
     
     print(f"[{get_beijing_time()}] [COMPLETE] 所有账户交易处理完成")
