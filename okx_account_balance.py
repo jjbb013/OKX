@@ -2,7 +2,7 @@
 任务名称
 name: OKX 账户资产检查
 定时规则
-cron: 0 */2 * * * *
+cron: 1 17 * * *
 """
 import os
 import json

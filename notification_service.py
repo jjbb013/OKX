@@ -1,7 +1,10 @@
 """
-通知服务模块
-统一管理所有通知功能，支持Bark推送
+任务名称
+name: 通知服务模块
+定时规则
+cron: 1 1 1 1 *
 """
+
 import os
 import json
 import time
