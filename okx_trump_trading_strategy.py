@@ -17,14 +17,14 @@ from notification_service import notification_service
 # ============== 可配置参数区域 ==============
 # 交易标的参数
 INST_ID = "TRUMP-USDT-SWAP"  # 交易标的
-BAR = "1m"  # K线规格
+BAR = "15m"  # K线规格
 LIMIT = 2  # 获取K线数量
 LEVERAGE = 10  # 杠杆倍数
 SizePoint = 0  # 下单数量的小数点保留位数
-CONTRACT_FACE_VALUE = 10  # TRUMP-USDT-SWAP合约面值为10美元
+CONTRACT_FACE_VALUE = 50  # TRUMP-USDT-SWAP合约面值为10美元
 
 # 策略参数
-MARGIN = 10  # 保证金(USDT)
+MARGIN = 5  # 保证金(USDT)
 TAKE_PROFIT_PERCENT = 0.02  # 止盈2%
 STOP_LOSS_PERCENT = 0.03    # 止损3%
 AMPLITUDE_PERCENT = 0.05    # 振幅5%
