@@ -125,16 +125,10 @@ def cancel_pending_open_orders(trade_api, account_prefix=""):
     
     for attempt in range(MAX_RETRIES + 1):
         try:
-            # 准备批量撤销请求
-            cancel_data = {
-                "cancels": cancel_orders
-            }
-            
+            cancel_data = {"cancels": cancel_orders}
             print(f"[{get_beijing_time()}] {account_prefix} [CANCEL] 正在批量撤销{len(cancel_orders)}个开仓订单 (尝试 {attempt+1}/{MAX_RETRIES+1})")
-            result = trade_api._request('POST', '/api/v5/trade/cancel-batch-orders', body=cancel_data)
-            
+            result = trade_api._request('POST', '/api/v5/trade/cancel-batch-orders', params=cancel_data)
             if result and 'code' in result and result['code'] == '0':
-                # 成功响应
                 failed_orders = []
                 for order_result in result['data']:
                     if order_result['sCode'] != '0':
@@ -143,12 +137,10 @@ def cancel_pending_open_orders(trade_api, account_prefix=""):
                             "code": order_result['sCode'],
                             "msg": order_result['sMsg']
                         })
-                
                 if failed_orders:
                     print(f"[{get_beijing_time()}] {account_prefix} [CANCEL] 部分订单撤销失败: {json.dumps(failed_orders)}")
                 else:
                     print(f"[{get_beijing_time()}] {account_prefix} [CANCEL] 所有{len(cancel_orders)}个订单撤销成功")
-                    # 撤销成功后等待一段时间确保撤销操作完成
                     print(f"[{get_beijing_time()}] {account_prefix} [CANCEL] 等待2秒确保撤销操作完成...")
                     time.sleep(2)
                     return True
@@ -157,7 +149,6 @@ def cancel_pending_open_orders(trade_api, account_prefix=""):
                 print(f"[{get_beijing_time()}] {account_prefix} [CANCEL] 批量撤销失败: {error_msg}")
         except Exception as e:
             print(f"[{get_beijing_time()}] {account_prefix} [CANCEL] 撤销订单异常 (尝试 {attempt+1}/{MAX_RETRIES+1}): {str(e)}")
-            
         if attempt < MAX_RETRIES:
             print(f"[{get_beijing_time()}] {account_prefix} [CANCEL] 重试中... ({attempt+1}/{MAX_RETRIES})")
             time.sleep(RETRY_DELAY)
@@ -246,10 +237,16 @@ def process_account_trading(account_suffix, signal, entry_price, amp_info):
     secret_key = os.getenv(f"OKX_SECRET_KEY{suffix}")
     passphrase = os.getenv(f"OKX_PASSPHRASE{suffix}")
     flag = os.getenv(f"OKX_FLAG{suffix}", "0")  # 默认实盘
+    account_name = os.getenv(f"OKX_ACCOUNT_NAME{suffix}") or f"账户{suffix}" if suffix else "默认账户"
     
     if not all([api_key, secret_key, passphrase]):
         print(f"[{get_beijing_time()}] {account_prefix} [ERROR] 账户信息不完整或未配置")
         return
+    
+    api_key = str(api_key)
+    secret_key = str(secret_key)
+    passphrase = str(passphrase)
+    flag = str(flag)
     
     # 初始化API
     try:

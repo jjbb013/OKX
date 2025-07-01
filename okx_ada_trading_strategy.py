@@ -179,6 +179,10 @@ def process_account_trading(account_suffix, signal, entry_price, amp_info):
     if not all([api_key, secret_key, passphrase]):
         print(f"[{get_beijing_time()}] {account_prefix} [ERROR] 账户信息不完整或未配置")
         return
+    api_key = str(api_key)
+    secret_key = str(secret_key)
+    passphrase = str(passphrase)
+    flag = str(flag)
     try:
         trade_api = Trade.TradeAPI(api_key, secret_key, passphrase, False, flag)
         market_api = MarketData.MarketAPI(api_key, secret_key, passphrase, False, flag)

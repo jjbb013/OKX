@@ -76,7 +76,7 @@ def cancel_pending_open_orders(trade_api, account_prefix=""):
         try:
             cancel_data = {"cancels": cancel_orders}
             print(f"[{get_beijing_time()}] {account_prefix} [CANCEL] 正在批量撤销{len(cancel_orders)}个开仓订单 (尝试 {attempt+1}/{MAX_RETRIES+1})")
-            result = trade_api._request('POST', '/api/v5/trade/cancel-batch-orders', body=cancel_data)
+            result = trade_api._request('POST', '/api/v5/trade/cancel-batch-orders', params=cancel_data)
             if result and 'code' in result and result['code'] == '0':
                 print(f"[{get_beijing_time()}] {account_prefix} [CANCEL] 所有{len(cancel_orders)}个订单撤销成功")
                 time.sleep(2)
@@ -224,6 +224,10 @@ def process_account_trading(account_suffix, signal, entry_price, amp_info):
     if not all([api_key, secret_key, passphrase]):
         print(f"[{get_beijing_time()}] {account_prefix} [ERROR] 账户信息不完整或未配置")
         return
+    api_key = str(api_key)
+    secret_key = str(secret_key)
+    passphrase = str(passphrase)
+    flag = str(flag)
     try:
         trade_api = Trade.TradeAPI(api_key, secret_key, passphrase, False, flag)
         market_api = MarketData.MarketAPI(api_key, secret_key, passphrase, False, flag)
