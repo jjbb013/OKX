@@ -22,8 +22,8 @@ INST_ID = "VINE-USDT-SWAP"
 BAR = "5m"
 LIMIT = 7  # 获取7根K线
 LEVERAGE = 10
-MARGIN = 5  # 保证金(USDT)
-CONTRACT_FACE_VALUE = 50  # 合约面值
+MARGIN = 10  # 保证金(USDT)
+CONTRACT_FACE_VALUE = 10  # 合约系数
 SizePoint = 0
 TAKE_PROFIT_PERCENT = 0.016  # 止盈1.6%
 STOP_LOSS_PERCENT = 0.02     # 止损2%
@@ -159,7 +159,7 @@ def process_account_trading(account_suffix, signal, entry_price, amp_info=None):
     cancel_pending_open_orders(trade_api, account_prefix)
     # 动态计算下单数量
     trade_value = MARGIN * LEVERAGE
-    raw_qty = trade_value / entry_price
+    raw_qty = trade_value / ( entry_price * CONTRACT_FACE_VALUE ) 
     qty = int((raw_qty + 9) // 10 * 10)
     print(f"[{get_beijing_time()}] {account_prefix} [SIZE_CALC] 计算下单数量: trade_value={trade_value}, entry_price={entry_price}, raw_qty={raw_qty}, qty={qty}")
     if qty == 0:

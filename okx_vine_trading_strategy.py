@@ -38,7 +38,7 @@ RANGE1_MAX = 1.5  # 振幅范围1最大值(1.5%)
 RANGE2_THRESHOLD = 2  # 振幅范围2阈值(2%)
 
 # 交易执行参数
-MARGIN = 5  # 保证金(USDT)
+MARGIN = 10  # 保证金(USDT)
 TAKE_PROFIT_PERCENT = 0.015  # 止盈比例改为1.5%
 STOP_LOSS_PERCENT = 0.03  # 止损比例(3%)
 
