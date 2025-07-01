@@ -2,7 +2,7 @@
 任务名称
 name: OKX TRUMP 自动交易 PROD
 定时规则
-cron: 1 */15 * * * *
+cron: 3 */15 * * * *
 """
 import os
 import json

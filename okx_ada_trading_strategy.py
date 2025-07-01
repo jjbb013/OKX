@@ -2,7 +2,7 @@
 任务名称
 name: OKX ADA 自动交易 PROD
 定时规则
-cron: 1 */5 * * * *
+cron: 3 */5 * * * *
 """
 import os
 import json

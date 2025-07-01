@@ -2,7 +2,7 @@
 任务名称
 name: OKX Eth 自动交易 PROD v2
 定时规则
-cron: 1 */5 * * * *
+cron: 3 */5 * * * *
 """
 import os
 import pandas as pd
