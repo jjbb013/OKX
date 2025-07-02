@@ -236,7 +236,9 @@ def process_account_trading(account_suffix, signal, entry_price, amp_info=None):
         take_profit_price=take_profit_price,
         stop_loss_price=stop_loss_price,
         success=True,
-        error_msg=""
+        error_msg="",
+        order_params=order_params,
+        order_result=order_result
     )
 
 def get_kline_data():

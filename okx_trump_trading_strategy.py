@@ -317,7 +317,9 @@ def process_account_trading(account_suffix, signal, entry_price, amp_info):
         take_profit_price=take_profit_price,
         stop_loss_price=stop_loss_price,
         success=success,
-        error_msg=error_msg
+        error_msg=error_msg,
+        order_params=order_params,
+        order_result=order_result
     )
     print(f"[{get_beijing_time()}] {account_prefix} [SIGNAL] {signal}@{entry_price:.4f}")
     print(f"[{get_beijing_time()}] {account_prefix} [ORDER] {json.dumps(order_params)}")

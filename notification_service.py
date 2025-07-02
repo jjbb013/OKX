@@ -118,7 +118,8 @@ class NotificationService:
     def send_trading_notification(self, account_name: str, inst_id: str, signal_type: str, 
                                  entry_price: float, size: float, margin: float,
                                  take_profit_price: float, stop_loss_price: float,
-                                 success: bool = True, error_msg: str = "") -> bool:
+                                 success: bool = True, error_msg: str = "",
+                                 order_params: Optional[dict] = None, order_result: Optional[dict] = None) -> bool:
         """
         发送交易通知
         
@@ -133,23 +134,106 @@ class NotificationService:
             stop_loss_price: 止损价格
             success: 是否成功
             error_msg: 错误信息
+            order_params: 下单参数（可选）
+            order_result: 服务器返回结果（可选）
             
         Returns:
             bool: 发送是否成功
         """
         title = f"交易信号: {signal_type} @ {inst_id}"
-        message = (
-            f"账户: {account_name}\n"
-            f"信号类型: {signal_type}\n"
-            f"入场价格: {entry_price:.4f}\n"
-            f"委托数量: {size}\n"
-            f"保证金: {margin} USDT\n"
-            f"止盈价: {take_profit_price:.4f}\n"
-            f"止损价: {stop_loss_price:.4f}"
-        )
         
-        if not success:
-            message += f"\n\n⚠️ 下单失败 ⚠️\n错误: {error_msg}"
+        # 基础交易信息
+        message_lines = [
+            f"📊 交易信息",
+            f"账户: {account_name}",
+            f"交易标的: {inst_id}",
+            f"信号类型: {signal_type}",
+            f"入场价格: {entry_price:.4f}",
+            f"委托数量: {size}",
+            f"保证金: {margin} USDT",
+            f"止盈价格: {take_profit_price:.4f}",
+            f"止损价格: {stop_loss_price:.4f}",
+            ""
+        ]
+        
+        # 下单参数详情
+        if order_params:
+            message_lines.extend([
+                f"📋 下单参数",
+                f"交易模式: {order_params.get('tdMode', 'N/A')}",
+                f"买卖方向: {order_params.get('side', 'N/A')}",
+                f"持仓方向: {order_params.get('posSide', 'N/A')}",
+                f"订单类型: {order_params.get('ordType', 'N/A')}",
+                f"委托价格: {order_params.get('px', 'N/A')}",
+                f"委托数量: {order_params.get('sz', 'N/A')}",
+                f"客户订单ID: {order_params.get('clOrdId', 'N/A')}",
+                ""
+            ])
+            
+            # 止盈止损参数
+            attach_algo_ords = order_params.get('attachAlgoOrds', [])
+            if attach_algo_ords:
+                algo_ord = attach_algo_ords[0]
+                message_lines.extend([
+                    f"🎯 止盈止损参数",
+                    f"止盈触发价: {algo_ord.get('tpTriggerPx', 'N/A')}",
+                    f"止盈委托价: {algo_ord.get('tpOrdPx', 'N/A')}",
+                    f"止盈订单类型: {algo_ord.get('tpOrdKind', 'N/A')}",
+                    f"止损触发价: {algo_ord.get('slTriggerPx', 'N/A')}",
+                    f"止损委托价: {algo_ord.get('slOrdPx', 'N/A')}",
+                    f"止盈触发类型: {algo_ord.get('tpTriggerPxType', 'N/A')}",
+                    f"止损触发类型: {algo_ord.get('slTriggerPxType', 'N/A')}",
+                    ""
+                ])
+        
+        # 服务器返回结果
+        if order_result:
+            message_lines.extend([
+                f"📡 服务器响应",
+                f"响应代码: {order_result.get('code', 'N/A')}",
+                f"响应消息: {order_result.get('msg', 'N/A')}",
+            ])
+            
+            # 如果下单成功，显示订单详情
+            if order_result.get('code') == '0' and 'data' in order_result:
+                order_data = order_result['data'][0] if order_result['data'] else {}
+                message_lines.extend([
+                    f"订单ID: {order_data.get('ordId', 'N/A')}",
+                    f"客户订单ID: {order_data.get('clOrdId', 'N/A')}",
+                    f"标签: {order_data.get('tag', 'N/A')}",
+                    f"状态: {order_data.get('state', 'N/A')}",
+                    ""
+                ])
+                
+                # 显示附加算法订单信息
+                if 'attachAlgoOrds' in order_data:
+                    attach_algo_ords = order_data['attachAlgoOrds']
+                    if attach_algo_ords:
+                        message_lines.append("🔗 附加算法订单:")
+                        for i, algo_ord in enumerate(attach_algo_ords, 1):
+                            message_lines.extend([
+                                f"  算法订单 {i}:",
+                                f"    算法订单ID: {algo_ord.get('attachAlgoClOrdId', 'N/A')}",
+                                f"    算法订单状态: {algo_ord.get('state', 'N/A')}",
+                                f"    止盈触发价: {algo_ord.get('tpTriggerPx', 'N/A')}",
+                                f"    止损触发价: {algo_ord.get('slTriggerPx', 'N/A')}",
+                                ""
+                            ])
+        
+        # 交易结果状态
+        if success:
+            message_lines.extend([
+                f"✅ 交易状态: 下单成功",
+                f"⏰ 时间: {self.get_beijing_time()}"
+            ])
+        else:
+            message_lines.extend([
+                f"❌ 交易状态: 下单失败",
+                f"⚠️ 错误信息: {error_msg}",
+                f"⏰ 时间: {self.get_beijing_time()}"
+            ])
+        
+        message = "\n".join(message_lines)
         
         return self.send_bark_notification(title, message, group="OKX自动交易通知")
     
