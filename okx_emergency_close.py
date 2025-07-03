@@ -2,7 +2,7 @@
 任务名称
 name: OKX 紧急平仓工具
 定时规则
-cron: 0 0 * * * *  # 手动执行，不自动运行
+cron: 0 0 1 1 0 
 """
 import os
 import json
