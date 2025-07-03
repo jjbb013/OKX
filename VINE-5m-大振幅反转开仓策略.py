@@ -136,6 +136,8 @@ def main():
             logger.info(f"[{get_shanghai_time()}] K线无方向，不开仓")
             return
         qty = int(QTY_USDT / order_price / CONTRACT_FACE_VALUE)
+        # 下单数量必须是10的整数倍，向上取整
+        qty = int(-(-qty // 10) * 10) if qty % 10 != 0 else qty
         if qty < 1:
             logger.info(f"[{get_shanghai_time()}] 下单数量过小，跳过本次开仓")
             return
@@ -179,6 +181,8 @@ def main():
         # 新增：无信号时也计算下单数量并写日志
         order_price = close  # 以当前收盘价估算
         qty = int(QTY_USDT / order_price / CONTRACT_FACE_VALUE)
+        # 下单数量必须是10的整数倍，向上取整
+        qty = int(-(-qty // 10) * 10) if qty % 10 != 0 else qty
         log_path = "logs/vine_k1k2_signals.log"
         os.makedirs("logs", exist_ok=True)
         with open(log_path, "a", encoding="utf-8") as f:
