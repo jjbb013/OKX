@@ -146,6 +146,7 @@ def main():
             trade_value = MARGIN * LEVERAGE
             raw_qty = trade_value / (entry_price * CONTRACT_FACE_VALUE)
             qty = int((raw_qty + 9) // 10 * 10)
+            print(f"[{get_shanghai_time()}] [INFO] 无信号时，{account_prefix} 计算下单数量: {qty}")
             os.makedirs("logs", exist_ok=True)
             with open(LOG_FILE, "a", encoding="utf-8") as f:
                 f.write(json.dumps({
