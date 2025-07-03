@@ -197,8 +197,13 @@ def analyze_kline(kline):
             signal = 'LONG' if is_green else 'SHORT'
             condition = f"满足振幅范围1条件({RANGE1_MIN}%-{RANGE1_MAX}%)"
         elif in_range2:
-            # 修改为使用收盘价入场
-            entry_price = close_price
+            # 极点策略：阳线用(high+close)/2，阴线用(low+close)/2
+            if is_green:
+                entry_price = (high_price + close_price) / 2
+            elif is_red:
+                entry_price = (low_price + close_price) / 2
+            else:
+                entry_price = None
             # 保持反向交易信号
             signal = 'SHORT' if is_green else 'LONG'
             condition = f"满足振幅范围2条件(实体振幅> {RANGE2_THRESHOLD}%)"
