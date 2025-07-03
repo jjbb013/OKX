@@ -93,12 +93,12 @@ def analyze_kline(kline_list):
     c2 = float(kline_list[1][4])
     body2 = abs(c2 - o2) / o2
     print(f"[DEBUG] K2开盘价: {o2}, 收盘价: {c2}, 实体振幅: {body2:.4f}")
-    # K3为方向判断
-    o3 = float(kline_list[2][1])
-    c3 = float(kline_list[2][4])
-    is_long = c3 > o3
-    is_short = c3 < o3
-    print(f"[DEBUG] K3开盘价: {o3}, 收盘价: {c3}, is_long: {is_long}, is_short: {is_short}")
+    # K2为方向判断（改为以K2的方向为准）
+    o2 = float(kline_list[1][1])
+    c2 = float(kline_list[1][4])
+    is_long = c2 > o2
+    is_short = c2 < o2
+    print(f"[DEBUG] K2开盘价: {o2}, 收盘价: {c2}, is_long: {is_long}, is_short: {is_short}")
     # K3~K6总单向振幅
     total_range = 0.0
     for i in range(2, 6):
@@ -118,6 +118,7 @@ def analyze_kline(kline_list):
         elif is_short:
             signal = "SHORT"
     print(f"[DEBUG] can_entry: {can_entry}, signal: {signal}, entry_price: {entry_price}")
+    print(f"[DEBUG] 方向判断: K2 {'阳线(做多)' if is_long else '阴线(做空)' if is_short else '平线(无方向)'}")
     return signal, entry_price, {
         "body2": body2,
         "total_range": total_range,
