@@ -176,6 +176,22 @@ def main():
         logger.info(f"[{get_shanghai_time()}] 下单响应: {resp}")
     else:
         logger.info(f"[{get_shanghai_time()}] K线不满足大振幅反转条件，不开仓")
+        # 新增：无信号时也计算下单数量并写日志
+        order_price = close  # 以当前收盘价估算
+        qty = int(QTY_USDT / order_price / CONTRACT_FACE_VALUE)
+        log_path = "logs/vine_k1k2_signals.log"
+        os.makedirs("logs", exist_ok=True)
+        with open(log_path, "a", encoding="utf-8") as f:
+            import json
+            f.write(json.dumps({
+                "time": get_shanghai_time(),
+                "account": get_env_var("OKX_ACCOUNT_NAME", default="未命名账户"),
+                "signal": "NO_SIGNAL",
+                "entry_price": order_price,
+                "qty": qty,
+                "note": "无信号时的下单数量估算"
+            }, ensure_ascii=False) + "\n")
+        print(f"[无信号下单数量估算] 时间: {get_shanghai_time()} 账户: {get_env_var('OKX_ACCOUNT_NAME', default='未命名账户')} 收盘价: {order_price} 数量: {qty}")
 
 if __name__ == "__main__":
     main() 
