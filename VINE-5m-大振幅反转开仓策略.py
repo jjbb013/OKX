@@ -27,7 +27,7 @@ SYMBOL = "VINE-USDT-SWAP"
 QTY_USDT = 10           # 名义下单金额
 KLINE_INTERVAL = "5m"
 FAKE_KLINE = False  # 测试开关，True 时用假K线数据
-CONTRACT_FACE_VALUE = 0.01  # ETH-USDT-SWAP每张合约面值
+CONTRACT_FACE_VALUE = 1  # ETH-USDT-SWAP每张合约面值
 
 logger = logging.getLogger("VINE-5m-大振幅反转开仓策略")
 logging.basicConfig(level=logging.INFO, format='[%(asctime)s][%(levelname)s] %(message)s')
