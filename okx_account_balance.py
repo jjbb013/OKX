@@ -70,9 +70,15 @@ def init_api(account_suffix=""):
         return None, None, None, account_prefix, account_name
     
     try:
-        account_api = Account.AccountAPI(api_key, secret_key, passphrase, False, flag)
-        trade_api = Trade.TradeAPI(api_key, secret_key, passphrase, False, flag)
-        market_api = MarketData.MarketAPI(api_key, secret_key, passphrase, False, flag)
+        # 确保所有参数都是字符串类型
+        api_key_str = str(api_key) if api_key else ""
+        secret_key_str = str(secret_key) if secret_key else ""
+        passphrase_str = str(passphrase) if passphrase else ""
+        flag_str = str(flag) if flag else "0"
+        
+        account_api = Account.AccountAPI(api_key_str, secret_key_str, passphrase_str, False, flag_str)
+        trade_api = Trade.TradeAPI(api_key_str, secret_key_str, passphrase_str, False, flag_str)
+        market_api = MarketData.MarketAPI(api_key_str, secret_key_str, passphrase_str, False, flag_str)
         print(f"[{get_beijing_time()}] {account_prefix} API初始化成功 - {account_name}")
         return account_api, trade_api, market_api, account_prefix, account_name
     except Exception as err:  # pylint: disable=broad-except
@@ -104,7 +110,7 @@ def get_positions(account_api, account_prefix=""):
         if result and 'code' in result and result['code'] == '0' and 'data' in result:
             positions = result['data']
             # 过滤出有持仓的记录
-            active_positions = [pos for pos in positions if float(pos.get('pos', '0')) != 0]
+            active_positions = [pos for pos in positions if float(pos.get('pos', '0') or '0') != 0]
             print(f"[{get_beijing_time()}] {account_prefix} [POSITION] 获取到{len(active_positions)}个活跃持仓")
             return active_positions
         else:
@@ -163,9 +169,9 @@ def format_balance_info(balances, account_prefix=""):
     lines.append("币种明细:")
     for d in details:
         ccy = d.get('ccy', '')
-        bal = float(d.get('bal', '0'))
-        eq_usd = float(d.get('eqUsd', 0)) if 'eqUsd' in d else 0
-        eq_cny = float(d.get('eqCny', 0)) if 'eqCny' in d else 0
+        bal = float(d.get('bal', '0') or '0')
+        eq_usd = float(d.get('eqUsd', 0) or 0)
+        eq_cny = float(d.get('eqCny', 0) or 0)
         if bal > 0 or eq_usd > 0:
             lines.append(f"  {ccy}: {bal:.4f} ≈ {eq_usd:.2f} USDT / {eq_cny:.2f} CNY")
     return "\n".join(lines)
@@ -182,10 +188,10 @@ def format_position_info(positions, account_prefix=""):
     for pos in positions:
         inst_id = pos.get('instId', '')
         pos_side = pos.get('posSide', '')
-        pos_size = float(pos.get('pos', '0'))
-        avg_px = float(pos.get('avgPx', '0'))
-        upl = float(pos.get('upl', '0'))
-        margin = float(pos.get('margin', '0'))
+        pos_size = float(pos.get('pos', '0') or '0')
+        avg_px = float(pos.get('avgPx', '0') or '0')
+        upl = float(pos.get('upl', '0') or '0')
+        margin = float(pos.get('margin', '0') or '0')
         
         if pos_size != 0:
             total_pnl += upl
@@ -292,11 +298,11 @@ def send_summary_notification(all_accounts):
                 account_cny = 0.0
                 if account["balances"]:
                     main_info = account["balances"][0]
-                    account_usdt = float(main_info.get('totalEq', 0))
-                    account_cny = float(main_info.get('totalCnyEq', 0)) if 'totalCnyEq' in main_info else 0
+                    account_usdt = float(main_info.get('totalEq', 0) or 0)
+                    account_cny = float(main_info.get('totalCnyEq', 0) or 0)
                 
                 # 计算总PnL
-                account_pnl = sum(float(pos.get('upl', '0')) for pos in account["positions"])
+                account_pnl = sum(float(pos.get('upl', '0') or '0') for pos in account["positions"])
                 
                 total_usdt += account_usdt
                 total_cny += account_cny
