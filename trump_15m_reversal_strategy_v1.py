@@ -1,3 +1,9 @@
+"""
+任务名称
+name: OKX TRUMP 大振幅反转策略V1
+定时规则
+cron: 3 */15 * * * *
+"""
 import os
 import json
 from utils import okx_utils
