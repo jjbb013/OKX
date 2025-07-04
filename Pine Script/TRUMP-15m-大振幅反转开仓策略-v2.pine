@@ -1,0 +1,103 @@
+//@version=6
+// TRUMP-15m-大振幅反转开仓策略 v2
+strategy("15Min TRUMP-USDT-SWAP 大振幅反转策略 v2", overlay=true, default_qty_type=strategy.cash, default_qty_value=50, currency=currency.USDT, slippage=2)
+
+// === 策略参数 ===
+takeProfitPerc = input.float(4.8, "止盈比例(%)", step=0.1)
+stopLossPerc   = input.float(2.7, "止损比例(%)", step=0.1)
+orderExpireHours = input.int(1, "订单有效期(小时)", minval=1)
+amplitudePerc = input.float(6, "振幅阈值(%)", step=0.1)
+margin = input.float(5, "每单保证金(USDT)", step=0.1)
+leverage = input.int(10, "杠杆倍数", minval=1)
+contract_face_value = input.float(1, "合约面值", step=0.01)
+show_labels        = input.bool(true,  "显示信号标签")
+slippage = input.float(0.16, "滑点", step=0.01)
+
+// === 计算K线数据 ===
+var float entry_price = na
+var float stop_loss   = na
+var float take_profit = na
+var string activeOrderID = na
+var int orderPlacedTime = na
+
+// 计算振幅
+rangePerc = (high - low) / low * 100
+
+// 方向判定
+isGreen = close > open
+isRed   = close < open
+
+// === 策略主逻辑 ===
+if strategy.position_size == 0
+    if rangePerc > amplitudePerc
+        if isGreen
+            // 做空信号
+            entry_price = (close + high) / 2
+            if not na(activeOrderID)
+                strategy.cancel(activeOrderID)
+                activeOrderID := na
+                orderPlacedTime := timenow
+            // 动态计算下单数量（保证金*杠杆/合约面值/价格，向上取整为10的倍数）
+            trade_value = margin * leverage
+            raw_qty = trade_value / entry_price / contract_face_value
+            qty = math.round(raw_qty / 10) * 10
+            tp_price = entry_price * (1 - takeProfitPerc / 100)
+            sl_price = entry_price * (1 + stopLossPerc / 100)
+            if qty >= 1
+                strategy.entry("Short", strategy.short, qty, limit=entry_price-slippage, comment="大振幅反转做空")
+                strategy.exit("TP/SL Short", from_entry="Short", limit=tp_price, stop=sl_price)
+                if show_labels
+                    label.new(bar_index, high, "做空\n价:" + str.tostring(entry_price, format.mintick) + "\n止盈:" + str.tostring(tp_price, format.mintick) + "\n止损:" + str.tostring(sl_price, format.mintick), color=color.red, style=label.style_label_down, textcolor=color.white)
+        else if isRed
+            // 做多信号
+            entry_price = (close + low) / 2
+            if not na(activeOrderID)
+                strategy.cancel(activeOrderID)
+                activeOrderID := na
+                orderPlacedTime := timenow
+            // 动态计算下单数量（保证金*杠杆/合约面值/价格，向上取整为10的倍数）
+            trade_value = margin * leverage
+            raw_qty = trade_value / entry_price / contract_face_value
+            qty = math.round(raw_qty / 10) * 10
+            tp_price = entry_price * (1 + takeProfitPerc / 100)
+            sl_price = entry_price * (1 - stopLossPerc / 100)
+            if qty >= 1
+                strategy.entry("Long", strategy.long, qty, limit=entry_price+slippage, comment="大振幅反转做多")
+                strategy.exit("TP/SL Long", from_entry="Long", limit=tp_price, stop=sl_price)
+                if show_labels
+                    label.new(bar_index, low, "做多\n价:" + str.tostring(entry_price, format.mintick) + "\n止盈:" + str.tostring(tp_price, format.mintick) + "\n止损:" + str.tostring(sl_price, format.mintick), color=color.green, style=label.style_label_up, textcolor=color.white)
+
+// === 图表信息 ===
+plotshape(rangePerc > amplitudePerc and isGreen, style=shape.triangledown, location=location.abovebar, color=color.red, size=size.tiny, title="做空信号")
+plotshape(rangePerc > amplitudePerc and isRed,   style=shape.triangleup,   location=location.belowbar, color=color.green, size=size.tiny, title="做多信号")
+
+// === 订单跟踪系统 ===
+if not na(activeOrderID) and (timenow - orderPlacedTime >= orderExpireHours * 3600000)
+    strategy.cancel(activeOrderID)
+    activeOrderID := na
+    orderPlacedTime := na
+
+// === 仓位管理 ===
+if strategy.opentrades > 0 and na(entry_price)
+    entry_price := strategy.opentrades.entry_price(strategy.opentrades - 1)
+    activeOrderID := na
+    orderPlacedTime := na
+
+// === 止盈止损 ===
+if not na(entry_price) and strategy.position_size != 0
+    if strategy.position_size > 0  // 多头持仓
+        tp_price = entry_price * (1 + takeProfitPerc / 100)
+        sl_price = entry_price * (1 - stopLossPerc / 100)
+        strategy.exit("Long Exit", "Long", stop=sl_price, limit=tp_price)
+    else  // 空头持仓
+        tp_price = entry_price * (1 - takeProfitPerc / 100)
+        sl_price = entry_price * (1 + stopLossPerc / 100)
+        strategy.exit("Short Exit", "Short", stop=sl_price, limit=tp_price)
+
+// === 状态重置 ===
+if strategy.position_size == 0
+    entry_price := na
+
+// === 可视化辅助 ===
+plot(rangePerc > amplitudePerc and isGreen ? high : na, title="大阳反转做空信号", color=color.red, style=plot.style_circles, linewidth=3)
+plot(rangePerc > amplitudePerc and isRed ? low : na, title="大阴反转做多信号", color=color.green, style=plot.style_circles, linewidth=3) 

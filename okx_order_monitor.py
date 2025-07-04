@@ -29,6 +29,8 @@ ACCOUNT_SUFFIXES = ["", "1", "2", "3"]  # 空字符串代表无后缀的默认�
 MONITOR_INST_IDS = [
     "ETH-USDT-SWAP",
     "VINE-USDT-SWAP",
+    "TRUMP-USDT-SWAP",
+    "ADA-USDT-SWAP"
     # 可以添加更多交易标的
 ]
 

@@ -29,6 +29,8 @@ ACCOUNT_SUFFIXES = ["", "1", "2", "3"]  # 空字符串代表无后缀的默认�
 EMERGENCY_INST_IDS = [
     "VINE-USDT-SWAP",
     "ETH-USDT-SWAP",
+    "TRUMP-USDT-SWAP",
+    "ADA-USDT-SWAP"
     # 可以添加更多需要平仓的交易标的
 ]
 
