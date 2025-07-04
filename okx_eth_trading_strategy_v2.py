@@ -271,6 +271,13 @@ def process_account_trading(account_suffix, signal, entry_price, amp_info):
         take_profit_price = round(entry_price * (1 - TAKE_PROFIT_PERCENT), 4)
         stop_loss_price = round(entry_price * (1 + STOP_LOSS_PERCENT), 4)
 
+    # 添加滑点
+    SLIPPAGE = 0.01
+    if signal == "LONG":
+        order_price = entry_price + SLIPPAGE
+    else:
+        order_price = entry_price - SLIPPAGE
+
     # 生成符合要求的clOrdId
     cl_ord_id = generate_clord_id(account_prefix)
 
@@ -292,7 +299,7 @@ def process_account_trading(account_suffix, signal, entry_price, amp_info):
         "tdMode": "cross",
         "side": "buy" if signal == "LONG" else "sell",
         "ordType": "limit",
-        "px": str(entry_price),
+        "px": str(order_price),
         "sz": str(size),
         "clOrdId": cl_ord_id,
         "posSide": "long" if signal == "LONG" else "short",
