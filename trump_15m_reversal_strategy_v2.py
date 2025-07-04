@@ -87,8 +87,8 @@ def main():
         if signal and entry_price:
             trade_value = MARGIN * LEVERAGE
             raw_qty = trade_value / entry_price / CONTRACT_FACE_VALUE
-            qty = int(round(raw_qty / 10) * 10)
-            if qty < 1:
+            qty = round(max(0.1, round(raw_qty / 0.1) * 0.1), 1)
+            if qty < 0.1:
                 print(f"[{okx_utils.get_shanghai_time()}] [{account_name}] 计算下单数量过小，跳过")
                 continue
             if signal == 'LONG':
@@ -119,7 +119,7 @@ def main():
             # 无信号时也计算应下单数量
             trade_value = MARGIN * LEVERAGE
             raw_qty = trade_value / latest_close / CONTRACT_FACE_VALUE
-            qty = int(round(raw_qty / 10) * 10)
+            qty = round(max(0.1, round(raw_qty / 0.1) * 0.1), 1)
             print(f"[{okx_utils.get_shanghai_time()}] [{account_name}] 无开仓信号，本周期应下单数量: {qty}")
 
 if __name__ == "__main__":
