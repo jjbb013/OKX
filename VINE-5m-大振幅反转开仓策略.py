@@ -28,51 +28,31 @@ QTY_USDT = 10           # 名义下单金额
 KLINE_INTERVAL = "5m"
 FAKE_KLINE = False  # 测试开关，True 时用假K线数据
 CONTRACT_FACE_VALUE = 1  # ETH-USDT-SWAP每张合约面值
+ACCOUNT_SUFFIXES = ["", "1"]  # 多账号支持，空字符串为主账号
 
 logger = logging.getLogger("VINE-5m-大振幅反转开仓策略")
 logging.basicConfig(level=logging.INFO, format='[%(asctime)s][%(levelname)s] %(message)s')
 
-def main():
-    # ========== 初始化日志 ==========
-    API_KEY = get_env_var("OKX_API_KEY")
-    SECRET_KEY = get_env_var("OKX_SECRET_KEY")
-    PASSPHRASE = get_env_var("OKX_PASSPHRASE")
-    FLAG = get_env_var("OKX_FLAG", default="0")
-    sh_time = get_shanghai_time()
-    # logger.info(f"[{sh_time}][DEBUG] API_KEY: {repr(API_KEY)}")
-    # logger.info(f"[{sh_time}][DEBUG] SECRET_KEY: {repr(SECRET_KEY)}")
-    # logger.info(f"[{sh_time}][DEBUG] PASSPHRASE: {repr(PASSPHRASE)}")
-    # logger.info(f"[{sh_time}][DEBUG] FLAG: {repr(FLAG)}")
+def process_account_trading(suffix, kline_data):
+    account_name = get_env_var("OKX_ACCOUNT_NAME", suffix, default="未命名账户")
+    account_prefix = f"[ACCOUNT-{account_name}]"
+    API_KEY = get_env_var("OKX_API_KEY", suffix)
+    SECRET_KEY = get_env_var("OKX_SECRET_KEY", suffix)
+    PASSPHRASE = get_env_var("OKX_PASSPHRASE", suffix)
+    FLAG = get_env_var("OKX_FLAG", suffix, default="0")
+    if not all([API_KEY, SECRET_KEY, PASSPHRASE]):
+        logger.error(f"[{get_shanghai_time()}]{account_prefix} 账户信息不完整或未配置")
+        return
     try:
         trade_api = get_trade_api()
-        logger.info(f"[{get_shanghai_time()}][DEBUG] TradeAPI初始化成功: {trade_api}")
+        logger.info(f"[{get_shanghai_time()}]{account_prefix} TradeAPI初始化成功: {trade_api}")
     except Exception as e:
-        logger.error(f"[{get_shanghai_time()}][DEBUG] TradeAPI初始化失败: {e}")
-        return
-
-    # 1. 获取K线和最新价格
-    # if FAKE_KLINE:
-    #     # 做多场景：阴线，振幅大，止损价低于开仓价
-    #     # open=110, high=111, low=100, close=101
-    #     # 振幅 = (111-100)/100 = 11%
-    #     # 开仓价 = (close+low)/2 = 100.5
-    #     # 止损价 = 98（低于开仓价），止盈价 = 106（高于开仓价）
-    #     kline_data = [
-    #         ["1751534700000", "110", "111", "100", "101", "10000", "1000", "1000000", "0"],
-    #         ["1751534400000", "110", "111", "109", "110", "8000", "800", "800000", "1"]
-    #     ]
-    #     logger.info(f"[{get_shanghai_time()}][DEBUG] 使用假K线数据（做多）")
-    # else:
-    kline_data = get_kline_data(API_KEY, SECRET_KEY, PASSPHRASE, SYMBOL, KLINE_INTERVAL, limit=2, flag=FLAG)
-    if not kline_data or len(kline_data) < 1:
-        logger.error(f"[{get_shanghai_time()}] 未获取到K线数据")
+        logger.error(f"[{get_shanghai_time()}]{account_prefix} TradeAPI初始化失败: {e}")
         return
     k = kline_data[0]
-    # OKX返回格式: [ts, o, h, l, c, ...]
     open_, high, low, close = float(k[1]), float(k[2]), float(k[3]), float(k[4])
-    logger.info(f"[{get_shanghai_time()}] 最新K线: open={open_}, close={close}, high={high}, low={low}")
-
-    # 2. 检查账户委托
+    logger.info(f"[{get_shanghai_time()}]{account_prefix} 最新K线: open={open_}, close={close}, high={high}, low={low}")
+    # 检查账户委托
     orders = get_orders_pending(trade_api, SYMBOL)
     need_skip = False
     if orders:
@@ -83,38 +63,36 @@ def main():
             if side == 'buy' and pos_side == 'long':
                 tp_price = price * (1 + TAKE_PROFIT_PERC / 100)
                 if close > tp_price:
-                    logger.info(f"[{get_shanghai_time()}] 多头委托已到达止盈价，撤销: {order}")
+                    logger.info(f"[{get_shanghai_time()}]{account_prefix} 多头委托已到达止盈价，撤销: {order}")
                     try:
                         cancel_result = cancel_pending_open_orders(trade_api, SYMBOL, order_ids=order.get('ordId'))
-                        logger.info(f"[{get_shanghai_time()}] 撤销多头委托响应: {cancel_result}")
+                        logger.info(f"[{get_shanghai_time()}]{account_prefix} 撤销多头委托响应: {cancel_result}")
                         if not cancel_result:
                             need_skip = True
                     except Exception as e:
-                        logger.error(f"[{get_shanghai_time()}] 撤销多头委托异常: {e}")
+                        logger.error(f"[{get_shanghai_time()}]{account_prefix} 撤销多头委托异常: {e}")
                         need_skip = True
             elif side == 'sell' and pos_side == 'short':
                 tp_price = price * (1 - TAKE_PROFIT_PERC / 100)
                 if close < tp_price:
-                    logger.info(f"[{get_shanghai_time()}] 空头委托已到达止盈价，撤销: {order}")
+                    logger.info(f"[{get_shanghai_time()}]{account_prefix} 空头委托已到达止盈价，撤销: {order}")
                     try:
                         cancel_result = cancel_pending_open_orders(trade_api, SYMBOL, order_ids=order.get('ordId'))
-                        logger.info(f"[{get_shanghai_time()}] 撤销空头委托响应: {cancel_result}")
+                        logger.info(f"[{get_shanghai_time()}]{account_prefix} 撤销空头委托响应: {cancel_result}")
                         if not cancel_result:
                             need_skip = True
                     except Exception as e:
-                        logger.error(f"[{get_shanghai_time()}] 撤销空头委托异常: {e}")
+                        logger.error(f"[{get_shanghai_time()}]{account_prefix} 撤销空头委托异常: {e}")
                         need_skip = True
         if need_skip:
-            logger.info(f"[{get_shanghai_time()}] 存在未完成委托且撤销失败，跳过本轮开仓")
+            logger.info(f"[{get_shanghai_time()}]{account_prefix} 存在未完成委托且撤销失败，跳过本轮开仓")
             return
-
-    # 3. 检查K线形态，准备开仓
+    # 检查K线形态，准备开仓
     range = (high - low) / low * 100
     in_range = range > RANGE_THRESHOLD
     is_green = close > open_
     is_red = close < open_
-    logger.info(f"[{get_shanghai_time()}] 振幅={range:.2f}%, in_range={in_range}, is_green={is_green}, is_red={is_red}")
-
+    logger.info(f"[{get_shanghai_time()}]{account_prefix} 振幅={range:.2f}%, in_range={in_range}, is_green={is_green}, is_red={is_red}")
     if in_range:
         order_price = None
         direction = None
@@ -133,19 +111,16 @@ def main():
             pos_side = "long"
             side = "buy"
         else:
-            logger.info(f"[{get_shanghai_time()}] K线无方向，不开仓")
+            logger.info(f"[{get_shanghai_time()}]{account_prefix} K线无方向，不开仓")
             return
         qty = int(QTY_USDT / order_price / CONTRACT_FACE_VALUE)
-        # 下单数量必须是10的整数倍，向上取整
         qty = int(-(-qty // 10) * 10) if qty % 10 != 0 else qty
         if qty < 1:
-            logger.info(f"[{get_shanghai_time()}] 下单数量过小，跳过本次开仓")
+            logger.info(f"[{get_shanghai_time()}]{account_prefix} 下单数量过小，跳过本次开仓")
             return
         tp = order_price * (1 - TAKE_PROFIT_PERC / 100) if direction == '做空' else order_price * (1 + TAKE_PROFIT_PERC / 100)
         sl = order_price * (1 + STOP_LOSS_PERC / 100) if direction == '做空' else order_price * (1 - STOP_LOSS_PERC / 100)
-        logger.info(f"[{get_shanghai_time()}] 准备开仓: 方向={direction}, 价格={order_price:.4f}, 数量={qty}, 止盈={tp:.4f}, 止损={sl:.4f}")
-
-        # 4. 下单
+        logger.info(f"[{get_shanghai_time()}]{account_prefix} 准备开仓: 方向={direction}, 价格={order_price:.4f}, 数量={qty}, 止盈={tp:.4f}, 止损={sl:.4f}")
         order_params = build_order_params(
             SYMBOL, side, order_price, qty, pos_side, tp, sl
         )
@@ -155,7 +130,6 @@ def main():
             resp = {"error": str(e)}
         sh_time = get_shanghai_time()
         strategy_name = "VINE-5m-大振幅反转策略"
-        account_name = get_env_var("OKX_ACCOUNT_NAME", default="未命名账户")
         is_success = False
         resp_json = resp if isinstance(resp, dict) else {"resp": str(resp)}
         if isinstance(resp, dict) and str(resp.get("code")) == "0":
@@ -175,13 +149,11 @@ def main():
             f"服务器响应: {resp_json}"
         )
         send_bark_notification(bark_title, bark_content)
-        logger.info(f"[{get_shanghai_time()}] 下单响应: {resp}")
+        logger.info(f"[{get_shanghai_time()}]{account_prefix} 下单响应: {resp}")
     else:
-        logger.info(f"[{get_shanghai_time()}] K线不满足大振幅反转条件，不开仓")
-        # 新增：无信号时也计算下单数量并写日志
-        order_price = close  # 以当前收盘价估算
+        logger.info(f"[{get_shanghai_time()}]{account_prefix} K线不满足大振幅反转条件，不开仓")
+        order_price = close
         qty = int(QTY_USDT / order_price / CONTRACT_FACE_VALUE)
-        # 下单数量必须是10的整数倍，向上取整
         qty = int(-(-qty // 10) * 10) if qty % 10 != 0 else qty
         log_path = "logs/vine_k1k2_signals.log"
         os.makedirs("logs", exist_ok=True)
@@ -189,13 +161,30 @@ def main():
             import json
             f.write(json.dumps({
                 "time": get_shanghai_time(),
-                "account": get_env_var("OKX_ACCOUNT_NAME", default="未命名账户"),
+                "account": account_name,
                 "signal": "NO_SIGNAL",
                 "entry_price": order_price,
                 "qty": qty,
                 "note": "无信号时的下单数量估算"
             }, ensure_ascii=False) + "\n")
-        print(f"[无信号下单数量估算] 时间: {get_shanghai_time()} 账户: {get_env_var('OKX_ACCOUNT_NAME', default='未命名账户')} 收盘价: {order_price} 数量: {qty}")
+        print(f"[无信号下单数量估算] 时间: {get_shanghai_time()} 账户: {account_name} 收盘价: {order_price} 数量: {qty}")
+
+
+def main():
+    print(f"[{get_shanghai_time()}] [INFO] 开始VINE-5m-大振幅反转策略 多账号模式")
+    # 统一获取K线，所有账号用同一根K线
+    suffix0 = ACCOUNT_SUFFIXES[0] if ACCOUNT_SUFFIXES else ""
+    API_KEY = get_env_var("OKX_API_KEY", suffix0)
+    SECRET_KEY = get_env_var("OKX_SECRET_KEY", suffix0)
+    PASSPHRASE = get_env_var("OKX_PASSPHRASE", suffix0)
+    FLAG = get_env_var("OKX_FLAG", suffix0, default="0")
+    kline_data = get_kline_data(API_KEY, SECRET_KEY, PASSPHRASE, SYMBOL, KLINE_INTERVAL, limit=2, flag=FLAG)
+    if not kline_data or len(kline_data) < 1:
+        print(f"[{get_shanghai_time()}] [ERROR] 未获取到K线数据")
+        return
+    for suffix in ACCOUNT_SUFFIXES:
+        process_account_trading(suffix, kline_data)
+    print(f"[{get_shanghai_time()}] [INFO] 所有账户处理完成")
 
 if __name__ == "__main__":
     main() 
