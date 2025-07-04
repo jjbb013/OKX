@@ -130,10 +130,8 @@ def main():
                         print(f"[{get_shanghai_time()}] [INFO] 空单委托止盈已到，撤销委托: {order['ordId']}")
                         cancel_pending_open_orders(trade_api, INST_ID, order_ids=order['ordId'])
                         need_skip = True
-            if need_skip:
-                print(f"[{get_shanghai_time()}] [INFO] 撤单后跳过本轮开仓: {account_name}")
-                continue
-        if orders:
+            # 撤单后不再 continue，直接进入下单逻辑
+        if orders and not need_skip:
             print(f"[{get_shanghai_time()}] [INFO] 存在未成交委托，跳过本轮: {account_name}")
             continue
         # 下单逻辑
