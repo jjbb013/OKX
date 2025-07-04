@@ -68,7 +68,8 @@ def analyze_kline(kline_list):
 
 
 def process_account_trading(suffix, signal, entry_price, amp_info):
-    account_prefix = f"[ACCOUNT-{suffix}]" if suffix else "[ACCOUNT]"
+    account_name = get_env_var("OKX_ACCOUNT_NAME", suffix, default="未命名账户")
+    account_prefix = f"[ACCOUNT-{account_name}]"
     # 获取TradeAPI
     api_key = get_env_var("OKX_API_KEY", suffix)
     secret_key = get_env_var("OKX_SECRET_KEY", suffix)
@@ -110,7 +111,7 @@ def process_account_trading(suffix, signal, entry_price, amp_info):
     with open(LOG_FILE, "a", encoding="utf-8") as f:
         f.write(json.dumps({
             "time": get_shanghai_time(),
-            "account": account_prefix,
+            "account": account_name,
             "signal": signal,
             "entry_price": entry_price,
             "qty": qty,
@@ -121,12 +122,12 @@ def process_account_trading(suffix, signal, entry_price, amp_info):
     # 通知
     send_bark_notification(
         f"{account_prefix} VINE K7趋势策略开仓",
-        f"信号: {signal}\n入场价: {entry_price}\n数量: {qty}\n止盈: {tp}\n止损: {sl}\n参数: {json.dumps(order_params, ensure_ascii=False)}\n结果: {json.dumps(order_result, ensure_ascii=False)}"
+        f"信号: {signal}\n账户: {account_name}\n入场价: {entry_price}\n数量: {qty}\n止盈: {tp}\n止损: {sl}\n参数: {json.dumps(order_params, ensure_ascii=False)}\n结果: {json.dumps(order_result, ensure_ascii=False)}"
     )
 
 
 def main():
-    print(f"[{get_shanghai_time()}] [INFO] 开始VINE K7 趋势策略")
+    print(f"[{get_shanghai_time()}] [INFO] 开始VINE K7 趋势策略 多账号模式")
     suffix = ACCOUNT_SUFFIXES[0] if ACCOUNT_SUFFIXES else ""
     api_key = get_env_var("OKX_API_KEY", suffix)
     secret_key = get_env_var("OKX_SECRET_KEY", suffix)
@@ -142,7 +143,8 @@ def main():
         # 新增：无信号时也计算下单数量并写日志
         entry_price = float(kline_data[1][4])  # K2收盘价
         for suffix in ACCOUNT_SUFFIXES:
-            account_prefix = f"[ACCOUNT-{suffix}]" if suffix else "[ACCOUNT]"
+            account_name = get_env_var("OKX_ACCOUNT_NAME", suffix, default="未命名账户")
+            account_prefix = f"[ACCOUNT-{account_name}]"
             trade_value = MARGIN * LEVERAGE
             raw_qty = trade_value / (entry_price * CONTRACT_FACE_VALUE)
             qty = int((raw_qty + 9) // 10 * 10)
@@ -151,7 +153,7 @@ def main():
             with open(LOG_FILE, "a", encoding="utf-8") as f:
                 f.write(json.dumps({
                     "time": get_shanghai_time(),
-                    "account": account_prefix,
+                    "account": account_name,
                     "signal": "NO_SIGNAL",
                     "entry_price": entry_price,
                     "qty": qty,
