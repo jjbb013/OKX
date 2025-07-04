@@ -37,10 +37,10 @@ def main():
             continue
         latest = kline[0]
         prev = kline[1]
-        latest_close = float(latest[4])
-        latest_high = float(latest[2])
-        latest_low = float(latest[3])
-        latest_open = float(latest[1])
+        prev_close = float(prev[4])
+        prev_high = float(prev[2])
+        prev_low = float(prev[3])
+        prev_open = float(prev[1])
         # 2. 检查未成交委托
         pending_orders = okx_utils.get_orders_pending(trade_api, INST_ID, account_prefix=account_name)
         order_canceled = False
@@ -61,7 +61,7 @@ def main():
                 print(f"[{okx_utils.get_shanghai_time()}] [{account_name}] 委托{order.get('ordId')}无止盈价，跳过")
                 continue
             # 做多委托，当前价超过止盈价撤单；做空委托，当前价低于止盈价撤单
-            if (side == 'buy' and pos_side == 'long' and latest_close > tp) or (side == 'sell' and pos_side == 'short' and latest_close < tp):
+            if (side == 'buy' and pos_side == 'long' and prev_close > tp) or (side == 'sell' and pos_side == 'short' and prev_close < tp):
                 print(f"[{okx_utils.get_shanghai_time()}] [{account_name}] 委托{order.get('ordId')}触发止盈，撤单")
                 okx_utils.cancel_pending_open_orders(trade_api, INST_ID, order_ids=order['ordId'], account_prefix=account_name)
                 order_canceled = True
@@ -71,18 +71,18 @@ def main():
             print(f"[{okx_utils.get_shanghai_time()}] [{account_name}] 有未成交委托，无需开新仓，当前委托数: {len(pending_orders)}")
             continue
         # 3. 信号判定
-        range_perc = (latest_high - latest_low) / latest_low * 100
-        is_green = latest_close > latest_open
-        is_red = latest_close < latest_open
+        range_perc = (prev_high - prev_low) / prev_low * 100
+        is_green = prev_close > prev_open
+        is_red = prev_close < prev_open
         entry_price = None
         signal = None
         if range_perc > AMPLITUDE_PERC:
             if is_green:
                 signal = 'SHORT'
-                entry_price = (latest_close + latest_high) / 2
+                entry_price = (prev_close + prev_high) / 2
             elif is_red:
                 signal = 'LONG'
-                entry_price = (latest_close + latest_low) / 2
+                entry_price = (prev_close + prev_low) / 2
         # 4. 下单逻辑
         if signal and entry_price:
             trade_value = MARGIN * LEVERAGE
@@ -118,7 +118,7 @@ def main():
         else:
             # 无信号时也计算应下单数量
             trade_value = MARGIN * LEVERAGE
-            raw_qty = trade_value / latest_close / CONTRACT_FACE_VALUE
+            raw_qty = trade_value / prev_close / CONTRACT_FACE_VALUE
             qty = round(max(0.1, round(raw_qty / 0.1) * 0.1), 1)
             print(f"[{okx_utils.get_shanghai_time()}] [{account_name}] 无开仓信号，本周期应下单数量: {qty}")
 
