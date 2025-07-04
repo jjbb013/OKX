@@ -21,34 +21,48 @@ def main():
     BAR = "15m"
     ACCOUNT_SUFFIXES = ["", "1"]  # 可扩展多账户
 
+    # 统一获取K线数据
+    api_key = okx_utils.get_env_var("OKX_API_KEY", "", None)
+    secret_key = okx_utils.get_env_var("OKX_SECRET_KEY", "", None)
+    passphrase = okx_utils.get_env_var("OKX_PASSPHRASE", "", None)
+    kline = okx_utils.get_kline_data(api_key, secret_key, passphrase, INST_ID, BAR, limit=2)
+    if not kline or len(kline) < 2:
+        print(f"[{okx_utils.get_shanghai_time()}] [ERROR] 获取K线失败，跳过全部账号")
+        return
+    prev = kline[1]
+    prev_close = float(prev[4])
+    prev_high = float(prev[2])
+    prev_low = float(prev[3])
+    prev_open = float(prev[1])
+    range_perc = (prev_high - prev_low) / prev_low * 100
+    is_green = prev_close > prev_open
+    is_red = prev_close < prev_open
+    entry_price = None
+    signal = None
+    if range_perc > AMPLITUDE_PERC:
+        if is_green:
+            signal = 'SHORT'
+            entry_price = (prev_close + prev_high) / 2
+        elif is_red:
+            signal = 'LONG'
+            entry_price = (prev_close + prev_low) / 2
+    # 再循环账号，做账户相关操作
     for suffix in ACCOUNT_SUFFIXES:
-        account_name = okx_utils.get_env_var("OKX_ACCOUNT_NAME", suffix, f"账户{suffix or '默认'}")
+        account_name = okx_utils.get_env_var("OKX_ACCOUNT_NAME", suffix, f"账号{suffix or '默认'}")
         api_key = okx_utils.get_env_var("OKX_API_KEY", suffix)
         secret_key = okx_utils.get_env_var("OKX_SECRET_KEY", suffix)
         passphrase = okx_utils.get_env_var("OKX_PASSPHRASE", suffix)
         if not all([api_key, secret_key, passphrase]):
-            print(f"[{okx_utils.get_shanghai_time()}] [ERROR] 账户{suffix or '默认'} API信息不完整，跳过")
+            print(f"[{okx_utils.get_shanghai_time()}] [ERROR] 账号{suffix or '默认'} API信息不完整，跳过")
             continue
         trade_api = okx_utils.init_trade_api(api_key, secret_key, passphrase, suffix=suffix)
-        # 1. 获取K线和最新收盘价
-        kline = okx_utils.get_kline_data(api_key, secret_key, passphrase, INST_ID, BAR, limit=2, suffix=suffix)
-        if not kline or len(kline) < 2:
-            print(f"[{okx_utils.get_shanghai_time()}] [{account_name}] 获取K线失败，跳过")
-            continue
-        latest = kline[0]
-        prev = kline[1]
-        prev_close = float(prev[4])
-        prev_high = float(prev[2])
-        prev_low = float(prev[3])
-        prev_open = float(prev[1])
-        # 2. 检查未成交委托
+        # 检查未成交委托
         pending_orders = okx_utils.get_orders_pending(trade_api, INST_ID, account_prefix=account_name)
         order_canceled = False
         for order in pending_orders:
             side = order.get('side')
             pos_side = order.get('posSide')
             order_price = float(order.get('px', 0))
-            # 止盈价优先从attachAlgoOrds
             tp = None
             attach_algo_ords = order.get('attachAlgoOrds', [])
             if attach_algo_ords and isinstance(attach_algo_ords, list) and len(attach_algo_ords) > 0 and 'tpTriggerPx' in attach_algo_ords[0]:
@@ -60,7 +74,6 @@ def main():
             if not tp:
                 print(f"[{okx_utils.get_shanghai_time()}] [{account_name}] 委托{order.get('ordId')}无止盈价，跳过")
                 continue
-            # 做多委托，当前价超过止盈价撤单；做空委托，当前价低于止盈价撤单
             if (side == 'buy' and pos_side == 'long' and prev_close > tp) or (side == 'sell' and pos_side == 'short' and prev_close < tp):
                 print(f"[{okx_utils.get_shanghai_time()}] [{account_name}] 委托{order.get('ordId')}触发止盈，撤单")
                 okx_utils.cancel_pending_open_orders(trade_api, INST_ID, order_ids=order['ordId'], account_prefix=account_name)
@@ -70,20 +83,7 @@ def main():
         elif pending_orders:
             print(f"[{okx_utils.get_shanghai_time()}] [{account_name}] 有未成交委托，无需开新仓，当前委托数: {len(pending_orders)}")
             continue
-        # 3. 信号判定
-        range_perc = (prev_high - prev_low) / prev_low * 100
-        is_green = prev_close > prev_open
-        is_red = prev_close < prev_open
-        entry_price = None
-        signal = None
-        if range_perc > AMPLITUDE_PERC:
-            if is_green:
-                signal = 'SHORT'
-                entry_price = (prev_close + prev_high) / 2
-            elif is_red:
-                signal = 'LONG'
-                entry_price = (prev_close + prev_low) / 2
-        # 4. 下单逻辑
+        # 下单逻辑
         if signal and entry_price:
             trade_value = MARGIN * LEVERAGE
             raw_qty = trade_value / entry_price / CONTRACT_FACE_VALUE
@@ -116,7 +116,6 @@ def main():
             except Exception as e:
                 print(f"[{okx_utils.get_shanghai_time()}] [{account_name}] 下单异常: {e}")
         else:
-            # 无信号时也计算应下单数量
             trade_value = MARGIN * LEVERAGE
             raw_qty = trade_value / prev_close / CONTRACT_FACE_VALUE
             qty = round(max(0.1, round(raw_qty / 0.1) * 0.1), 1)
