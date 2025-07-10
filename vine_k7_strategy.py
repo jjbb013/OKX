@@ -100,7 +100,7 @@ def process_account_trading(suffix, signal, entry_price, amp_info):
     order_params = build_order_params(INST_ID, side, entry_price, qty, pos_side, tp, sl, prefix="VINE")
     # 下单
     order_result = None
-    for attempt in range(3):
+    for attempt in range(1):
         try:
             order_result = trade_api.place_order(**order_params)
             break
