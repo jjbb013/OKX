@@ -103,6 +103,7 @@ def process_account_trading(suffix, signal, entry_price, amp_info):
     for attempt in range(1):
         try:
             order_result = trade_api.place_order(**order_params)
+            print(order_result)
             break
         except Exception as e:
             print(f"[{get_shanghai_time()}] {account_prefix} [ORDER] 下单异常 (尝试 {attempt+1}/3): {str(e)}")
