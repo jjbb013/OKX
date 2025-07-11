@@ -14,6 +14,7 @@ import okx.MarketData as MarketData
 import okx.Trade as Trade
 from notification_service import notification_service
 
+
 # ============== 可配置参数区域 ==============
 # 交易标的参数
 INST_ID = "ADA-USDT-SWAP"  # 交易标的
@@ -137,6 +138,19 @@ def cancel_order(trade_api, inst_id, ord_id, account_prefix=""):
             time.sleep(RETRY_DELAY)
     print(f"[{get_beijing_time()}] {account_prefix} [CANCEL] 订单{ord_id}撤销失败")
     return False, "撤销失败"
+
+def cancel_pending_open_orders(trade_api, account_prefix=""):
+    """
+    撤销所有未成交的开仓订单（只撤销开仓方向的订单，平仓单不处理）
+    """
+    pending_orders = get_pending_orders(trade_api, INST_ID, account_prefix)
+    for order in pending_orders:
+        # 只撤销开仓订单
+        pos_side = order.get('posSide', '')
+        # 只处理long/short方向的开仓单
+        if pos_side in ['long', 'short', '']:
+            ord_id = order['ordId']
+            cancel_order(trade_api, INST_ID, ord_id, account_prefix)
 
 def analyze_kline(kline):
     open_price = float(kline[1])
