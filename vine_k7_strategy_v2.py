@@ -25,11 +25,11 @@ CONTRACT_FACE_VALUE = 10  # VINE-USDT-SWAP合约面值为10美元
 
 # 策略参数
 MARGIN = 5  # 保证金(USDT)
-TAKE_PROFIT_PERCENT = 0.016  # 止盈1.6%
-STOP_LOSS_PERCENT = 0.02     # 止损2%
+TAKE_PROFIT_PERCENT = 0.018  # 止盈1.6%
+STOP_LOSS_PERCENT = 0.017     # 止损2%
 MIN_BODY1 = 0.01  # K2最小实体振幅(1%)
 MAX_BODY1 = 0.04  # K2最大实体振幅(4%)
-MAX_TOTAL_RANGE = 0.02  # K3~K6总单向振幅上限(2%)
+MAX_TOTAL_RANGE = 0.017  # K3~K6总单向振幅上限(2%)
 
 # 环境变量账户后缀，支持多账号
 ACCOUNT_SUFFIXES = ["1", "2"]

@@ -216,8 +216,7 @@ def process_account_trading(account_suffix, signal, entry_price, amp_info):
     cancel_pending_open_orders(trade_api, account_prefix)
     # 计算下单数量（保证金10USDT，10倍杠杆，价值约100USDT，向上取整为10的倍数）
     trade_value = MARGIN * LEVERAGE
-    raw_qty = trade_value / entry_price
-    qty = int((raw_qty + 9) // 10 * 10)  # 向上取整为10的倍数
+    qty = trade_value / entry_price * 0.1
     if qty == 0:
         print(f"[{get_beijing_time()}] {account_prefix} [ERROR] 计算数量为0，放弃交易")
         notification_service.send_bark_notification(
