@@ -19,12 +19,12 @@ from notification_service import notification_service
 INST_ID = "VINE-USDT-SWAP"  # 交易标的
 BAR = "5m"  # K线规格
 LIMIT = 2  # 获取K线数量
-LEVERAGE = 10  # 杠杆倍数
+LEVERAGE = 20  # 杠杆倍数
 SizePoint = 0  # 下单数量的小数点保留位数
 CONTRACT_FACE_VALUE = 1  # VINE-USDT-SWAP合约面值为1美元
 
 # 策略参数
-MARGIN = 10  # 保证金(USDT)
+MARGIN = 5  # 保证金(USDT)
 TAKE_PROFIT_PERCENT = 0.055  # 止盈5.5%
 STOP_LOSS_PERCENT = 0.017    # 止损1.7%
 AMPLITUDE_PERCENT = 0.042    # 振幅4.2%
