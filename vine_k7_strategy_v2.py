@@ -43,7 +43,12 @@ def get_beijing_time():
     return datetime.now(beijing_tz).strftime("%Y-%m-%d %H:%M:%S")
 
 def get_env_var(var_name, suffix="", default=None):
-    return os.getenv(f"{var_name}{suffix}", default)
+    if suffix:
+        # 对于多账号，格式为 OKX1_ACCOUNT_NAME, OKX2_API_KEY 等
+        return os.getenv(f"OKX{suffix}_{var_name}", default)
+    else:
+        # 对于默认账号，格式为 OKX_ACCOUNT_NAME, OKX_API_KEY 等
+        return os.getenv(f"OKX_{var_name}", default)
 
 def get_current_price(market_api, inst_id, account_prefix=""):
     for attempt in range(MAX_RETRIES + 1):
@@ -202,11 +207,11 @@ def process_account_trading(account_suffix, signal, entry_price, amp_info):
     account_prefix = f"[ACCOUNT-{suffix}]" if suffix else "[ACCOUNT]"
     
     # 使用新的环境变量格式
-    api_key = get_env_var("OKX_API_KEY", suffix)
-    secret_key = get_env_var("OKX_SECRET_KEY", suffix)
-    passphrase = get_env_var("OKX_PASSPHRASE", suffix)
-    flag = get_env_var("OKX_FLAG", suffix, "0")
-    account_name = get_env_var("OKX_ACCOUNT_NAME", suffix) or f"账户{suffix}" if suffix else "默认账户"
+    api_key = get_env_var("API_KEY", suffix)
+    secret_key = get_env_var("SECRET_KEY", suffix)
+    passphrase = get_env_var("PASSPHRASE", suffix)
+    flag = get_env_var("FLAG", suffix, "0")
+    account_name = get_env_var("ACCOUNT_NAME", suffix) or f"账户{suffix}" if suffix else "默认账户"
     
     if not all([api_key, secret_key, passphrase]):
         print(f"[{get_beijing_time()}] {account_prefix} [ERROR] 账户信息不完整或未配置")
@@ -331,10 +336,10 @@ def process_account_trading(account_suffix, signal, entry_price, amp_info):
 
 def get_kline_data():
     suffix = ACCOUNT_SUFFIXES[0] if ACCOUNT_SUFFIXES else ""
-    api_key = get_env_var("OKX_API_KEY", suffix)
-    secret_key = get_env_var("OKX_SECRET_KEY", suffix)
-    passphrase = get_env_var("OKX_PASSPHRASE", suffix)
-    flag = get_env_var("OKX_FLAG", suffix, "0")
+    api_key = get_env_var("API_KEY", suffix)
+    secret_key = get_env_var("SECRET_KEY", suffix)
+    passphrase = get_env_var("PASSPHRASE", suffix)
+    flag = get_env_var("FLAG", suffix, "0")
     
     if not all([api_key, secret_key, passphrase]):
         print(f"[{get_beijing_time()}] [ERROR] 账户信息不完整，无法获取K线数据")
@@ -391,7 +396,7 @@ if __name__ == "__main__":
         # 无信号时也记录日志
         if entry_price:
             for suffix in ACCOUNT_SUFFIXES:
-                account_name = get_env_var("OKX_ACCOUNT_NAME", suffix) or f"账户{suffix}"
+                account_name = get_env_var("ACCOUNT_NAME", suffix) or f"账户{suffix}"
                 trade_value = MARGIN * LEVERAGE
                 raw_qty = trade_value / (entry_price * CONTRACT_FACE_VALUE)
                 qty = int((raw_qty + 9) // 10 * 10)
