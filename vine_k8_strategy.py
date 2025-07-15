@@ -7,7 +7,6 @@ name: VINE-K8趋势策略
 cron: 1 */5 * * * *
 """
 
-
 import os
 import sys
 import time
@@ -29,6 +28,7 @@ import okx.Trade as Trade
 import okx.MarketData as MarketData
 
 DATA_DIR = '/ql/data/VINE-5M-DATA/'
+#DATA_DIR = 'VINE-5M-DATA'
 CSV_PREFIX = 'VINE-5M'
 MAX_ROWS = 1000
 MIN_ROWS = 150
@@ -288,23 +288,18 @@ class VINEK8Strategy:
         """检查趋势"""
         if len(kline_data) < self.ema144:
             return False, False
-        
         # 获取收盘价列表
         closes = [float(kline[4]) for kline in kline_data]
-        closes.reverse()  # 反转列表，使最新的在前面
-        
+        # closes.reverse()  # 已经是最旧到最新，无需反转
         # 计算EMA
         ema21_value = self.calculate_ema(closes, self.ema21)
         ema60_value = self.calculate_ema(closes, self.ema60)
         ema144_value = self.calculate_ema(closes, self.ema144)
-        
         if ema21_value is None or ema60_value is None or ema144_value is None:
             return False, False
-        
         # 趋势判断
         bullish_trend = ema21_value > ema60_value and ema60_value > ema144_value
         bearish_trend = ema21_value < ema60_value and ema60_value < ema144_value
-        
         return bullish_trend, bearish_trend
     
     def check_and_cancel_orders(self, trade_api, account_name: str, latest_price: float) -> bool:
@@ -509,7 +504,7 @@ class VINEK8Strategy:
         bullish_trend, bearish_trend = self.check_trend(kline_data)
         # ====== 新增：EMA详细日志 ======
         closes = [float(k[4]) for k in kline_data]
-        closes.reverse()
+        # closes.reverse()  # 已经是最旧到最新，无需反转
         ema21_value = self.calculate_ema(closes, self.ema21)
         ema60_value = self.calculate_ema(closes, self.ema60)
         ema144_value = self.calculate_ema(closes, self.ema144)
@@ -520,7 +515,7 @@ class VINEK8Strategy:
                 trend_str = "空头趋势"
             else:
                 trend_str = "震荡/无明显趋势"
-            self.log(f"[DEBUG] EMA21={ema21_value:.4f}, EMA60={ema60_value:.4f}, EMA144={ema144_value:.4f}, 趋势判断: {trend_str}")
+            self.log(f"[DEBUG] EMA21={ema21_value:.5f}, EMA60={ema60_value:.5f}, EMA144={ema144_value:.5f}, 趋势判断: {trend_str}")
         else:
             self.log(f"[DEBUG] EMA数据不足，无法判断趋势")
         
