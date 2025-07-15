@@ -385,11 +385,12 @@ class VINEK8Strategy:
                 stop_loss=stop_loss_price,
                 prefix="VINE"
             )
-            
+            self.log(f"[DEBUG] 提交OKX下单参数: {order_params}", account_name)
             self.log(f"准备下单: {signal} {size}张 @ {entry_price}", account_name)
             
             # 执行下单
             result = trade_api.place_order(**order_params)
+            self.log(f"[DEBUG] OKX下单返回: {result}", account_name)
             
             if result and result.get('code') == '0':
                 order_data = result.get('data', [{}])[0]
@@ -506,6 +507,22 @@ class VINEK8Strategy:
         
         # 检查趋势
         bullish_trend, bearish_trend = self.check_trend(kline_data)
+        # ====== 新增：EMA详细日志 ======
+        closes = [float(k[4]) for k in kline_data]
+        closes.reverse()
+        ema21_value = self.calculate_ema(closes, self.ema21)
+        ema60_value = self.calculate_ema(closes, self.ema60)
+        ema144_value = self.calculate_ema(closes, self.ema144)
+        if ema21_value is not None and ema60_value is not None and ema144_value is not None:
+            if ema21_value > ema60_value and ema60_value > ema144_value:
+                trend_str = "多头趋势"
+            elif ema21_value < ema60_value and ema60_value < ema144_value:
+                trend_str = "空头趋势"
+            else:
+                trend_str = "震荡/无明显趋势"
+            self.log(f"[DEBUG] EMA21={ema21_value:.4f}, EMA60={ema60_value:.4f}, EMA144={ema144_value:.4f}, 趋势判断: {trend_str}")
+        else:
+            self.log(f"[DEBUG] EMA数据不足，无法判断趋势")
         
         # 记录分析结果
         self.log(f"K0方向: {'多头' if analysis['k0_is_long'] else '空头' if analysis['k0_is_short'] else '平盘'}")
