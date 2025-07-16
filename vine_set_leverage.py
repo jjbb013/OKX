@@ -16,7 +16,7 @@ ACCOUNT_SUFFIXES = ["", "1", "2", "3"]  # 空字符串代表无后缀的默认�
 
 # 交易标的参数
 INST_ID = "VINE-USDT-SWAP"  # 交易标的
-LEVERAGE = 10  # 杠杆倍数
+LEVERAGE = 20  # 杠杆倍数
 MARGIN_MODE = "cross"  # 保证金模式：cross (全仓) 或 isolated (逐仓)
 
 # 网络请求重试配置
