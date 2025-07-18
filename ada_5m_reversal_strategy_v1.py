@@ -217,7 +217,7 @@ def process_account_trading(account_suffix, signal, entry_price, amp_info):
     # 计算下单数量（保证金10USDT，10倍杠杆，价值约100USDT，向下取整为0.1的倍数）
     trade_value = MARGIN * LEVERAGE
     raw_qty = trade_value / entry_price
-    qty = int(raw_qty / 0.1) * 0.1 * 0.1 * 0.1  # 向下取整为0.1的倍数
+    qty = int(raw_qty / 0.1) * 0.001  # 向下取整为0.1的倍数
     qty = round(qty, 1)  # 保留1位小数
     if qty == 0:
         print(f"[{get_beijing_time()}] {account_prefix} [ERROR] 计算数量为0，放弃交易")
