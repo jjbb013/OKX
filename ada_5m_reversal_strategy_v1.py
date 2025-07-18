@@ -214,9 +214,11 @@ def process_account_trading(account_suffix, signal, entry_price, amp_info):
                 cancel_order(trade_api, INST_ID, order['ordId'], account_prefix)
     print(f"[{get_beijing_time()}] {account_prefix} [ORDER] 检测到信号，先撤销现有开仓订单")
     cancel_pending_open_orders(trade_api, account_prefix)
-    # 计算下单数量（保证金10USDT，10倍杠杆，价值约100USDT，向上取整为10的倍数）
+    # 计算下单数量（保证金10USDT，10倍杠杆，价值约100USDT，向下取整为0.1的倍数）
     trade_value = MARGIN * LEVERAGE
-    qty = trade_value / entry_price * 0.1
+    raw_qty = trade_value / entry_price
+    qty = int(raw_qty / 0.1) * 0.1 * 0.1  # 向下取整为0.1的倍数
+    qty = round(qty, 1)  # 保留1位小数
     if qty == 0:
         print(f"[{get_beijing_time()}] {account_prefix} [ERROR] 计算数量为0，放弃交易")
         notification_service.send_bark_notification(
@@ -225,7 +227,7 @@ def process_account_trading(account_suffix, signal, entry_price, amp_info):
             group="OKX自动交易通知"
         )
         return
-    print(f"[{get_beijing_time()}] {account_prefix} [SIZE_CALC] 下单数量: {qty} (10的倍数)")
+    print(f"[{get_beijing_time()}] {account_prefix} [SIZE_CALC] 下单数量: {qty} (0.1的倍数)")
     if signal == "LONG":
         take_profit_price = round(entry_price * (1 + TAKE_PROFIT_PERCENT), 5)
         stop_loss_price = round(entry_price * (1 - STOP_LOSS_PERCENT), 5)
