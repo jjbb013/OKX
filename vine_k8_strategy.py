@@ -130,7 +130,7 @@ class VINEK8Strategy:
         self.contract_face_value = 10  # VINE-USDT-SWAP合约面值为10美元
         
         # 风控参数
-        self.margin = 1  # 保证金(USDT)
+        self.margin = 2  # 保证金(USDT)
         self.take_profit_percent = 0.02  # 止盈2%
         self.stop_loss_percent = 0.015   # 止损1.5%
         
@@ -363,11 +363,11 @@ class VINEK8Strategy:
             
             # 计算止盈止损价格
             if signal == "LONG":
-                take_profit_price = entry_price * (1 + self.take_profit_percent)
-                stop_loss_price = entry_price * (1 - self.stop_loss_percent)
+                take_profit_price = round(entry_price * (1 + self.take_profit_percent),5)
+                stop_loss_price = round(entry_price * (1 - self.stop_loss_percent),5)
             else:
-                take_profit_price = entry_price * (1 - self.take_profit_percent)
-                stop_loss_price = entry_price * (1 + self.stop_loss_percent)
+                take_profit_price = round(entry_price * (1 - self.take_profit_percent),5)
+                stop_loss_price = round(entry_price * (1 + self.stop_loss_percent),5)
             
             # 构建下单参数
             order_params = build_order_params(
