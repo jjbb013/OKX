@@ -302,10 +302,11 @@ def process_account_trading(account_suffix, signal, entry_price, direction, amp_
     print(f"[{get_beijing_time()}] {account_prefix} [ORDER] 检测到信号，先撤销现有开仓订单")
     cancel_pending_open_orders(trade_api, account_prefix)
     
-    # 计算下单数量（保证金10USDT，10倍杠杆，价值约100USDT，向上取整为10的倍数）
+    # 计算下单数量（保证金10USDT，10倍杠杆，价值约100USDT，向上取整为10的倍数，再除以10）
     trade_value = MARGIN * LEVERAGE
     raw_qty = trade_value / (entry_price * CONTRACT_FACE_VALUE)
-    qty = int((raw_qty + 9) // 10 * 10)  # 向上取整为10的倍数
+    base_qty = int((raw_qty + 9) // 10 * 10)  # 向上取整为10的倍数
+    qty = base_qty // 10  # 在原基础上除以10
     
     if qty < 1:
         print(f"[{get_beijing_time()}] {account_prefix} [ERROR] 下单数量过小，跳过本次开仓")
@@ -328,6 +329,8 @@ def process_account_trading(account_suffix, signal, entry_price, direction, amp_
     
     # 生成订单参数
     cl_ord_id = generate_clord_id()
+    # 价格截断为4位小数
+    truncated_entry_price = int(entry_price * 10000) / 10000.0
     attach_algo_ord = {
         "attachAlgoClOrdId": generate_clord_id(),
         "tpTriggerPx": str(take_profit_price),
@@ -344,7 +347,7 @@ def process_account_trading(account_suffix, signal, entry_price, direction, amp_
         "tdMode": "cross",
         "side": "buy" if signal == "LONG" else "sell",
         "ordType": "limit",
-        "px": str(entry_price),
+        "px": str(truncated_entry_price),
         "sz": str(qty),
         "clOrdId": cl_ord_id,
         "posSide": "long" if signal == "LONG" else "short",
@@ -382,14 +385,14 @@ def process_account_trading(account_suffix, signal, entry_price, direction, amp_
                 print(f"[{get_beijing_time()}] {account_prefix} [ORDER] 所有尝试失败")
     
     # 保存交易日志
-    save_trading_log(account_name, signal, entry_price, qty, order_params, order_result, amp_info)
+    save_trading_log(account_name, signal, truncated_entry_price, qty, order_params, order_result, amp_info)
     
     # 发送通知
     notification_service.send_trading_notification(
         account_name=account_name,
         inst_id=INST_ID,
         signal_type=signal,
-        entry_price=entry_price,
+        entry_price=truncated_entry_price,
         size=qty,
         margin=MARGIN,
         take_profit_price=take_profit_price,
@@ -397,10 +400,12 @@ def process_account_trading(account_suffix, signal, entry_price, direction, amp_
         success=success,
         error_msg=error_msg,
         order_params=order_params,
-        order_result=order_result
+        order_result=order_result,
+        strategy_name="vine_5m_reversal_strategy_v2",
+        s_msg=f"Order failed. Insufficient USDT margin in account " if "insufficient" in error_msg.lower() else ""
     )
     
-    print(f"[{get_beijing_time()}] {account_prefix} [SIGNAL] {signal}@{entry_price:.4f}")
+    print(f"[{get_beijing_time()}] {account_prefix} [SIGNAL] {signal}@{truncated_entry_price:.4f}")
     print(f"[{get_beijing_time()}] {account_prefix} [ORDER] {json.dumps(order_params)}")
     print(f"[{get_beijing_time()}] {account_prefix} [RESULT] {json.dumps(order_result)}")
 
@@ -435,14 +440,25 @@ def get_kline_data():
                 print(f"[{get_beijing_time()}] [MARKET] 所有尝试失败")
                 return None, None, None, None
     
-    if not result or 'data' not in result or len(result['data']) < 1:
+    if not result or 'data' not in result or not result['data']:
         print(f"[{get_beijing_time()}] [ERROR] 获取K线数据失败或数据不足")
         return None, None, None, None
-    
-    latest_kline = result['data'][0]
-    print(f"[{get_beijing_time()}] [DEBUG] 正在分析最新K线: {latest_kline}")
-    
-    signal, entry_price, direction, amp_info = analyze_kline(latest_kline)
+
+    kline_to_analyze = None
+    # 根据用户提供的信息，K线是否完结的标志在第6个位置 (索引5)，值为'1'
+    # API返回数据按时间倒序，我们从最新的开始找第一个完整的K线
+    for kline in result['data']:
+        if len(kline) > 5 and kline[5] == '1':
+            kline_to_analyze = kline
+            break  # 找到了最新的一个完整K线
+
+    if kline_to_analyze is None:
+        print(f"[{get_beijing_time()}] [ERROR] 未找到任何完整的K线进行分析")
+        return None, None, None, None
+
+    print(f"[{get_beijing_time()}] [DEBUG] 正在分析最新完整K线: {kline_to_analyze}")
+
+    signal, entry_price, direction, amp_info = analyze_kline(kline_to_analyze)
     
     print(f"[{get_beijing_time()}] [KLINE] 分析结果:")
     print(f"  标的: {INST_ID} | K线规格: {BAR}")
@@ -477,13 +493,15 @@ if __name__ == "__main__":
         print(f"[{get_beijing_time()}] [INFO] 未检测到交易信号")
         # 无信号时也记录日志
         if entry_price:
+            truncated_entry_price = int(entry_price * 10000) / 10000.0
             for suffix in ACCOUNT_SUFFIXES:
                 account_name = get_env_var("ACCOUNT_NAME", suffix) or f"账户{suffix}"
                 trade_value = MARGIN * LEVERAGE
-                raw_qty = trade_value / (entry_price * CONTRACT_FACE_VALUE)
-                qty = int((raw_qty + 9) // 10 * 10)
+                raw_qty = trade_value / (truncated_entry_price * CONTRACT_FACE_VALUE)
+                base_qty = int((raw_qty + 9) // 10 * 10)  # 向上取整为10的倍数
+                qty = base_qty // 10 # 在原基础上除以10
                 print(f"[{get_beijing_time()}] [INFO] 无信号时，{account_name} 计算下单数量: {qty}")
-                save_trading_log(account_name, "NO_SIGNAL", entry_price, qty, {}, {}, amp_info)
+                save_trading_log(account_name, "NO_SIGNAL", truncated_entry_price, qty, {}, {}, amp_info)
         exit(0)
     
     print(f"[{get_beijing_time()}] [INFO] 开始处理所有账户交易")
