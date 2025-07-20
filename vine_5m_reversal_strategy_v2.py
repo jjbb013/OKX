@@ -416,9 +416,9 @@ def get_kline_data():
     passphrase = get_env_var("PASSPHRASE", suffix)
     flag = get_env_var("FLAG", suffix, "0")
     
-    if not all([api_key, secret_key, passphrase]):
-        print(f"[{get_beijing_time()}] [ERROR] 账户信息不完整，无法获取K线数据")
-        return None, None, None, None
+    #if not all([api_key, secret_key, passphrase]):
+    #    print(f"[{get_beijing_time()}] [ERROR] 账户信息不完整，无法获取K线数据")
+    #    return None, None, None, None
     
     try:
         market_api = MarketData.MarketAPI(str(api_key), str(secret_key), str(passphrase), False, str(flag))
@@ -430,6 +430,7 @@ def get_kline_data():
     for attempt in range(MAX_RETRIES + 1):
         try:
             result = market_api.get_candlesticks(instId=INST_ID, bar=BAR, limit=str(LIMIT))
+            print(f"[{get_beijing_time()}] [MARKET] 获取K线数据成功: {result}")
             break
         except Exception as e:
             print(f"[{get_beijing_time()}] [MARKET] 获取K线数据异常 (尝试 {attempt+1}/{MAX_RETRIES+1}): {str(e)}")
@@ -448,7 +449,7 @@ def get_kline_data():
     # 根据用户提供的信息，K线是否完结的标志在第6个位置 (索引5)，值为'1'
     # API返回数据按时间倒序，我们从最新的开始找第一个完整的K线
     for kline in result['data']:
-        if len(kline) > 5 and kline[5] == '1':
+        if len(kline) > 5 and kline[8] == '1':
             kline_to_analyze = kline
             break  # 找到了最新的一个完整K线
 
