@@ -398,11 +398,9 @@ def process_account_trading(account_suffix, signal, entry_price, direction, amp_
         take_profit_price=take_profit_price,
         stop_loss_price=stop_loss_price,
         success=success,
-        error_msg=error_msg,
+        error_msg=f"[vine_5m_reversal_strategy_v2] {error_msg}",
         order_params=order_params,
-        order_result=order_result,
-        strategy_name="vine_5m_reversal_strategy_v2",
-        s_msg=f"Order failed. Insufficient USDT margin in account " if "insufficient" in error_msg.lower() else ""
+        order_result=order_result
     )
     
     print(f"[{get_beijing_time()}] {account_prefix} [SIGNAL] {signal}@{truncated_entry_price:.4f}")
