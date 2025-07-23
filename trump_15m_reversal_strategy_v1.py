@@ -16,7 +16,7 @@ def main():
     SLIPPAGE = 0.04
     MARGIN = 5
     LEVERAGE = 10
-    CONTRACT_FACE_VALUE = 1
+    CONTRACT_FACE_VALUE = 0.1
     INST_ID = "TRUMP-USDT-SWAP"
     BAR = "15m"
     ACCOUNT_SUFFIXES = ["", "1"]  # 可扩展多账户
