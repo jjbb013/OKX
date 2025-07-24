@@ -27,98 +27,91 @@ from okx_utils import (
 import okx.Trade as Trade
 import okx.MarketData as MarketData
 
+# Constants for data management
 DATA_DIR = '/ql/data/VINE-5M-DATA/'
-#DATA_DIR = 'VINE-5M-DATA'
-CSV_PREFIX = 'VINE-5M'
-MAX_ROWS = 1000
-MIN_ROWS = 150
+#DATA_DIR = 'VINE-5M-DATA' # Keep this for easy local testing if needed
+CSV_FILE_PATH = os.path.join(DATA_DIR, 'VINE-5M.csv')  # Single CSV file for this strategy
+MIN_ROWS = 150  # The number of rows to keep for analysis
 
-def get_latest_csv_file(dir_path, prefix):
-    print(f"[DEBUG] 查找最新CSV文件: 目录={dir_path}, 前缀={prefix}")
-    files = sorted(glob(os.path.join(dir_path, f"{prefix}-*.csv")))
-    print(f"[DEBUG] 找到文件: {files}")
-    if not files:
-        return None
-    return files[-1]
 
-def load_kline_from_csv(filepath):
-    print(f"[DEBUG] 读取CSV文件: {filepath}")
-    if not filepath or not os.path.exists(filepath):
-        print(f"[DEBUG] 文件不存在: {filepath}")
+def load_kline_from_csv(filepath: str) -> List[List[str]]:
+    """Loads K-line data from a CSV file."""
+    print(f"[DEBUG] Reading K-lines from {filepath}")
+    if not os.path.exists(filepath):
+        print(f"[DEBUG] File not found: {filepath}")
         return []
-    with open(filepath, 'r') as f:
-        reader = csv.reader(f)
-        data = list(reader)
-    print(f"[DEBUG] 读取到{len(data)}条K线数据")
-    return data
+    try:
+        with open(filepath, 'r', newline='') as f:
+            reader = csv.reader(f)
+            data = list(reader)
+        print(f"[DEBUG] Loaded {len(data)} K-lines from CSV.")
+        return data
+    except Exception as e:
+        print(f"[ERROR] Failed to read CSV file {filepath}: {e}")
+        return []
 
-def save_kline_to_csv(filepath, kline_data):
-    print(f"[DEBUG] 保存{len(kline_data)}条K线到CSV: {filepath}")
-    with open(filepath, 'w', newline='') as f:
-        writer = csv.writer(f)
-        writer.writerows(kline_data)
-    print(f"[DEBUG] 保存完成")
+def save_kline_to_csv(filepath: str, kline_data: List[List[str]]):
+    """Saves K-line data to a CSV file, overwriting it."""
+    print(f"[DEBUG] Saving {len(kline_data)} K-lines to {filepath}")
+    try:
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        with open(filepath, 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerows(kline_data)
+        print(f"[DEBUG] Save complete.")
+    except Exception as e:
+        print(f"[ERROR] Failed to save CSV file {filepath}: {e}")
 
-def append_kline_to_csv(filepath, kline_data):
-    print(f"[DEBUG] 追加K线到CSV: {filepath}")
-    existing = load_kline_from_csv(filepath)
-    existing_ts = set(row[0] for row in existing)
-    new_rows = [row for row in kline_data if row[0] not in existing_ts]
-    print(f"[DEBUG] 新增{len(new_rows)}条K线")
-    if not new_rows:
-        return
-    with open(filepath, 'a', newline='') as f:
-        writer = csv.writer(f)
-        writer.writerows(new_rows)
-    print(f"[DEBUG] 追加完成")
-
-def fetch_kline_from_okx(inst_id, bar, limit, flag):
-    print(f"[DEBUG] 拉取OKX K线: inst_id={inst_id}, bar={bar}, limit={limit}, flag={flag}")
+def fetch_kline_from_okx(inst_id: str, bar: str, limit: int, flag: str) -> List[List[str]]:
+    """Fetches K-line data from OKX and returns it in oldest-to-newest order."""
+    print(f"[DEBUG] Fetching OKX K-lines: inst_id={inst_id}, bar={bar}, limit={limit}, flag={flag}")
     marketDataAPI = MarketData.MarketAPI(flag=flag)
     result = marketDataAPI.get_mark_price_candlesticks(instId=inst_id, bar=bar, limit=str(limit))
-    print(f"[DEBUG] OKX返回: {result}")
     if result and result.get('code') == '0':
-        return result['data']
+        data = result.get('data', [])
+        if data:
+            print(f"[DEBUG] Fetched {len(data)} K-lines from OKX.")
+            # OKX returns data from newest to oldest, reverse it
+            return data[::-1]
+    print(f"[DEBUG] Failed to fetch K-lines from OKX. Response: {result}")
     return []
 
-def rotate_csv_file_if_needed(dir_path, prefix, max_rows):
-    latest_file = get_latest_csv_file(dir_path, prefix)
-    if not latest_file:
-        new_file = os.path.join(dir_path, f"{prefix}-1.csv")
-        print(f"[DEBUG] 新建CSV文件: {new_file}")
-        return new_file
-    rows = load_kline_from_csv(latest_file)
-    if len(rows) < max_rows:
-        return latest_file
-    idx = int(latest_file.split('-')[-1].replace('.csv', '')) + 1
-    new_file = os.path.join(dir_path, f"{prefix}-{idx}.csv")
-    print(f"[DEBUG] 文件超{max_rows}条，轮换新文件: {new_file}")
-    return new_file
+def get_kline_data(inst_id: str, bar: str, min_rows: int = MIN_ROWS, flag: str = '0') -> List[List[str]]:
+    """
+    Manages K-line data by maintaining a single CSV file with the latest data.
+    """
+    print(f"[DEBUG] Starting K-line data update. Target rows: {min_rows}")
+    
+    # 1. Load existing data
+    existing_data = load_kline_from_csv(CSV_FILE_PATH)
+    
+    # 2. Fetch latest few candles to get updates
+    latest_fetched_data = fetch_kline_from_okx(inst_id, bar, 5, flag)
+    
+    # 3. Merge data using a dictionary to handle duplicates and sort by timestamp
+    all_data_map = {row[0]: row for row in existing_data}
+    for row in latest_fetched_data:
+        all_data_map[row[0]] = row
+        
+    # 4. Backfill if necessary
+    if len(all_data_map) < min_rows:
+        print(f"[DEBUG] Not enough data ({len(all_data_map)}/{min_rows}). Backfilling...")
+        needed = min_rows - len(all_data_map)
+        limit = ((needed // 100) + 1) * 100
+        historical_data = fetch_kline_from_okx(inst_id, bar, limit, flag)
+        for row in historical_data:
+            all_data_map[row[0]] = row
 
-def get_kline_data_with_cache(inst_id, bar, min_rows=MIN_ROWS, max_rows=MAX_ROWS, flag='0'):
-    print(f"[DEBUG] 开始获取K线数据，目标最少{min_rows}条")
-    os.makedirs(DATA_DIR, exist_ok=True)
-    latest_csv = get_latest_csv_file(DATA_DIR, CSV_PREFIX)
-    kline_data = load_kline_from_csv(latest_csv) if latest_csv else []
-    print(f"[DEBUG] 当前本地K线数量: {len(kline_data)}")
-    if len(kline_data) < min_rows:
-        fetch_count = max(min_rows - len(kline_data), min_rows)
-        print(f"[DEBUG] 本地K线不足，需拉取{fetch_count}条")
-        new_data = fetch_kline_from_okx(inst_id, bar, fetch_count, flag)
-        all_data = {row[0]: row for row in (kline_data + new_data)}
-        kline_data = [all_data[ts] for ts in sorted(all_data.keys())]
-        csv_path = rotate_csv_file_if_needed(DATA_DIR, CSV_PREFIX, max_rows)
-        save_kline_to_csv(csv_path, kline_data[-max_rows:])
-        latest_csv = csv_path
-    new_data = fetch_kline_from_okx(inst_id, bar, 5, flag)
-    append_kline_to_csv(latest_csv, new_data)
-    if len(load_kline_from_csv(latest_csv)) > max_rows:
-        csv_path = rotate_csv_file_if_needed(DATA_DIR, CSV_PREFIX, max_rows)
-        save_kline_to_csv(csv_path, load_kline_from_csv(latest_csv)[-max_rows:])
-        latest_csv = csv_path
-    final_data = load_kline_from_csv(latest_csv)[-min_rows:]
-    print(f"[DEBUG] 最终返回K线数量: {len(final_data)}")
-    return final_data
+    # 5. Sort by timestamp (oldest first) and trim to the latest `min_rows`
+    sorted_timestamps = sorted(all_data_map.keys())
+    final_kline_data = [all_data_map[ts] for ts in sorted_timestamps]
+    final_kline_data = final_kline_data[-min_rows:]
+    
+    # 6. Save back to the single CSV
+    save_kline_to_csv(CSV_FILE_PATH, final_kline_data)
+    
+    print(f"[DEBUG] Final K-line count is {len(final_kline_data)}. Data is up-to-date.")
+    return final_kline_data
 
 class VINEK8Strategy:
     def __init__(self):
@@ -477,20 +470,21 @@ class VINEK8Strategy:
             self.log("未配置任何账户")
             return
         print(f"[DEBUG] 当前账户数量: {len(self.accounts)}")
-        # 1. 获取K线数据（本地缓存+自动拉取）
-        kline_data = get_kline_data_with_cache(
+        
+        # 1. 获取K线数据
+        kline_data = get_kline_data(
             inst_id=self.inst_id,
             bar=self.bar,
-            min_rows=150,
-            max_rows=1000,
+            min_rows=MIN_ROWS,
             flag=self.accounts[0]['flag'] if self.accounts else '0'
         )
         print(f"[DEBUG] 获取到K线数量: {len(kline_data)}")
-        if not kline_data:
-            print("[DEBUG] 获取K线数据失败")
-            self.log("获取K线数据失败")
+        if not kline_data or len(kline_data) < MIN_ROWS:
+            self.log(f"获取K线数据不足 ({len(kline_data)}/{MIN_ROWS})，无法执行策略。")
             return
-        latest_price = float(kline_data[0][4])  # 最新K线收盘价
+            
+        # K线数据从旧到新排序, [-1]是最新价格
+        latest_price = float(kline_data[-1][4])
         print(f"[DEBUG] 最新合约价格: {latest_price}")
         self.log(f"最新合约价格: {latest_price}")
         
