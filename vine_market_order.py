@@ -8,7 +8,6 @@ import string
 import time
 from datetime import datetime, timezone, timedelta
 import okx.Trade as Trade
-from notification_service import notification_service
 
 # ============== 可配置参数区域 ==============
 INST_ID = "VINE-USDT-SWAP"  # 交易标的
@@ -90,20 +89,6 @@ def market_order(account_suffix, order_size, order_side):
                 time.sleep(RETRY_DELAY)
             else:
                 print(f"[{get_beijing_time()}] {account_prefix} [ORDER] 所有尝试失败")
-    notification_service.send_trading_notification(
-        account_name=account_name,
-        inst_id=INST_ID,
-        signal_type=order_side.upper(),
-        entry_price=entry_price,
-        size=order_size,
-        margin=None,
-        take_profit_price=None,
-        stop_loss_price=None,
-        success=success,
-        error_msg=f"[vine_market_order] {error_msg}",
-        order_params=order_params,
-        order_result=order_result
-    )
     print(f"[{get_beijing_time()}] {account_prefix} [ORDER] 市价下单完成")
 
 if __name__ == "__main__":
