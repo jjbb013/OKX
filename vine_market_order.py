@@ -12,12 +12,12 @@ from notification_service import notification_service
 
 # ============== 可配置参数区域 ==============
 INST_ID = "VINE-USDT-SWAP"  # 交易标的
-ORDER_SIZE = 10  # 下单张数
-ORDER_SIDE = "buy"  # "buy" 做多，"sell" 做空
+ORDER_SIZE = 200  # 下单张数
+ORDER_SIDE = "sell"  # "buy" 做多，"sell" 做空
 ACCOUNT_SUFFIXES = ["1", "2"]  # 多账号支持
 
-MAX_RETRIES = 3
-RETRY_DELAY = 2
+MAX_RETRIES = 1
+RETRY_DELAY = 1
 
 def get_beijing_time():
     beijing_tz = timezone(timedelta(hours=8))
@@ -56,6 +56,7 @@ def market_order(account_suffix, order_size, order_side):
         print(f"[{get_beijing_time()}] {account_prefix} [ERROR] API初始化失败: {str(e)}")
         return
     cl_ord_id = generate_clord_id()
+    entry_price = 0  # 市价单无入场价，避免通知报错
     order_params = {
         "instId": INST_ID,
         "tdMode": "cross",
@@ -93,7 +94,7 @@ def market_order(account_suffix, order_size, order_side):
         account_name=account_name,
         inst_id=INST_ID,
         signal_type=order_side.upper(),
-        entry_price=None,
+        entry_price=entry_price,
         size=order_size,
         margin=None,
         take_profit_price=None,
