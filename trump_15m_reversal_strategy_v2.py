@@ -42,10 +42,10 @@ def main():
     if range_perc > AMPLITUDE_PERC:
         if is_green:
             signal = 'SHORT'
-            entry_price = round((prev_close + prev_high) / 2, 3)
+            entry_price = (prev_close + prev_high) / 2
         elif is_red:
             signal = 'LONG'
-            entry_price = round((prev_close + prev_low) / 2, 3)
+            entry_price = (prev_close + prev_low) / 2
     # 再循环账号，做账户相关操作
     for suffix in ACCOUNT_SUFFIXES:
         account_name = okx_utils.get_env_var("OKX_ACCOUNT_NAME", suffix, f"账号{suffix or '默认'}")
@@ -87,19 +87,19 @@ def main():
         if signal and entry_price:
             trade_value = MARGIN * LEVERAGE
             raw_qty = trade_value / entry_price / CONTRACT_FACE_VALUE
-            qty = int(raw_qty)
-            if qty < 1:
+            qty = round(max(0.1, round(raw_qty / 0.1) * 0.1), 1)
+            if qty < 0.1:
                 print(f"[{okx_utils.get_shanghai_time()}] [{account_name}] 计算下单数量过小，跳过")
                 continue
             if signal == 'LONG':
-                order_px = round(entry_price + SLIPPAGE, 3)
-                tp_price = round(entry_price * (1 + TAKE_PROFIT_PERC), 3)
-                sl_price = round(entry_price * (1 - STOP_LOSS_PERC), 3)
+                order_px = entry_price + SLIPPAGE
+                tp_price = entry_price * (1 + TAKE_PROFIT_PERC)
+                sl_price = entry_price * (1 - STOP_LOSS_PERC)
                 side, pos_side = 'buy', 'long'
             else:
-                order_px = round(entry_price - SLIPPAGE, 3)
-                tp_price = round(entry_price * (1 - TAKE_PROFIT_PERC), 3)
-                sl_price = round(entry_price * (1 + STOP_LOSS_PERC), 3)
+                order_px = entry_price - SLIPPAGE
+                tp_price = entry_price * (1 - TAKE_PROFIT_PERC)
+                sl_price = entry_price * (1 + STOP_LOSS_PERC)
                 side, pos_side = 'sell', 'short'
             order_params = okx_utils.build_order_params(
                 INST_ID, side, order_px, qty, pos_side, tp_price, sl_price, prefix="TRUMP"
@@ -118,7 +118,7 @@ def main():
         else:
             trade_value = MARGIN * LEVERAGE
             raw_qty = trade_value / prev_close / CONTRACT_FACE_VALUE
-            qty = int(raw_qty)
+            qty = round(max(0.1, round(raw_qty / 0.1) * 0.1), 1)
             print(f"[{okx_utils.get_shanghai_time()}] [{account_name}] 无开仓信号，本周期应下单数量: {qty}")
 
 if __name__ == "__main__":
