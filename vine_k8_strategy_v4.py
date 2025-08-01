@@ -27,11 +27,12 @@ import okx.Trade as Trade
 import okx.MarketData as MarketData
 
 def get_kline_data(inst_id: str, bar: str, limit: int, flag: str) -> List:
-    """直接从OKX API获取K线数据"""
+    """直接从OKX API获取K线数据 (V4修正：使用get_candlesticks)"""
     print(f"[DEBUG] 直接从OKX拉取K线: inst_id={inst_id}, bar={bar}, limit={limit}")
     try:
         marketDataAPI = MarketData.MarketAPI(flag=flag)
-        result = marketDataAPI.get_mark_price_candlesticks(instId=inst_id, bar=bar, limit=str(limit))
+        # V4修正：调用正确的API接口以获取包含状态位的K线数据
+        result = marketDataAPI.get_candlesticks(instId=inst_id, bar=bar, limit=str(limit))
         if result and result.get('code') == '0' and result.get('data'):
             print(f"[DEBUG] 成功从OKX拉取到 {len(result['data'])} 条K线")
             return result['data']
