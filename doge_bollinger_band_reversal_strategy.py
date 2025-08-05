@@ -1,6 +1,6 @@
 """
 任务名称
-name: OKX Doge 布林带大振幅反向策略 QA
+name: OKX Doge 布林带大振幅反向策略 PROD
 定时规则
 cron: 1 */5 * * * *
 """
@@ -169,6 +169,7 @@ class BollingerStrategy:
         :param kline_data: K线数据（最新在前）
         :return: 信号字典（无信号时返回None）
         """
+        self.log("开始生成交易信号...")
         if len(kline_data) < self.params['bb_length']:
             self.log(f"K线数据不足 ({len(kline_data)}/{self.params['bb_length']})，无法计算布林带")
             return None
@@ -176,6 +177,7 @@ class BollingerStrategy:
         # 解析最新K线
         latest = kline_data[0]
         ts, o, h, l, c = latest[0], float(latest[1]), float(latest[2]), float(latest[3]), float(latest[4])
+        self.log(f"分析最新K线 (TS: {ts}): O={o}, H={h}, L={l}, C={c}")
         
         # ⚠️ 防重复信号：同一根K线不重复触发
         current_ts = int(ts) // 1000
@@ -186,23 +188,29 @@ class BollingerStrategy:
         # 计算布林带
         closes = [float(k[4]) for k in kline_data]  # 提取收盘价
         upper, basis, lower = self.calculate_bollinger_bands(closes)
+        self.log(f"布林带计算结果: 上轨={self.format_price(upper)}, 中轨={self.format_price(basis)}, 下轨={self.format_price(lower)}")
         
         # 计算影线与实体
         upper_wick = h - max(o, c)  # 上影线高度
         lower_wick = min(o, c) - l   # 下影线高度
         body = abs(c - o)            # K线实体高度
-        
+        self.log(f"K线形态计算: 上影线={self.format_price(upper_wick)}, 下影线={self.format_price(lower_wick)}, 实体={self.format_price(body)}")
+        self.log(f"影线阈值参数: {self.params['wick_threshold']}")
+
         # 信号条件判断
-        short_signal = (
-            upper_wick >= self.params['wick_threshold'] and  # 上影线超过阈值
-            h > upper and                                  # 最高价突破上轨
-            max(o, c) < upper                              # 收盘价低于上轨
-        )
-        long_signal = (
-            lower_wick >= self.params['wick_threshold'] and  # 下影线超过阈值
-            l < lower and                                  # 最低价突破下轨
-            min(o, c) > lower                               # 收盘价高于下轨
-        )
+        self.log("开始判断做空信号条件...")
+        cond1_short = upper_wick >= self.params['wick_threshold']
+        cond2_short = h > upper
+        cond3_short = max(o, c) < upper
+        short_signal = cond1_short and cond2_short and cond3_short
+        self.log(f"做空条件检查: 上影线超阈值({cond1_short}), 最高价破上轨({cond2_short}), 收盘价低于上轨({cond3_short}) -> 最终信号: {short_signal}")
+
+        self.log("开始判断做多信号条件...")
+        cond1_long = lower_wick >= self.params['wick_threshold']
+        cond2_long = l < lower
+        cond3_long = min(o, c) > lower
+        long_signal = cond1_long and cond2_long and cond3_long
+        self.log(f"做多条件检查: 下影线超阈值({cond1_long}), 最低价破下轨({cond2_long}), 收盘价高于下轨({cond3_long}) -> 最终信号: {long_signal}")
         
         # 只有当至少有一个信号为True时，才返回信号字典
         if short_signal or long_signal:
@@ -225,6 +233,7 @@ class BollingerStrategy:
             }
 
         # 如果没有任何信号，则返回None
+        self.log("未发现有效交易信号。")
         return None
 
     # ---------- 仓位计算函数 ----------
@@ -235,17 +244,25 @@ class BollingerStrategy:
         :param account_name: 账户名（用于日志）
         :return: 调整后的合约张数（0.01的整数倍）
         """
+        self.log(f"开始为账户 {account_name} 计算仓位大小...", account_name)
         # 计算公式：合约张数 = (保证金 × 杠杆) / (价格 × 合约面值)
         # ⚠️ DOGE-USDT-SWAP合约面值 = 10（每张合约代表10 DOGE）
         contract_face_value = 10
-        raw_size = (self.params['order_value'] * self.params['leverage']) / (entry_price * contract_face_value)
+        order_value = self.params['order_value']
+        leverage = self.params['leverage']
+        
+        self.log(f"计算参数: 保证金={order_value} USDT, 杠杆={leverage}x, 入场价={entry_price}, 合约面值={contract_face_value}", account_name)
+        
+        raw_size = (order_value * leverage) / (entry_price * contract_face_value)
+        self.log(f"原始计算数量 (raw_size) = ({order_value} * {leverage}) / ({entry_price} * {contract_face_value}) = {raw_size}", account_name)
         
         # 精度调整
         adjusted_size = self.adjust_quantity(raw_size)
+        self.log(f"调整精度后数量 (adjusted_size) = {adjusted_size}", account_name)
         
         # 检查是否低于最小交易量
         if adjusted_size < 0.01:
-            self.log(f"计算数量{adjusted_size}小于0.01张，跳过下单", account_name)
+            self.log(f"计算数量 {adjusted_size} 小于最小交易单位 0.01，跳过下单", account_name)
             return 0.0
             
         return adjusted_size
@@ -310,19 +327,19 @@ class BollingerStrategy:
                 self.log(f"账户处理异常: {str(e)}", acc_name)
 
     def place_order(
-        self, 
-        api: Trade.TradeAPI, 
-        acc_name: str, 
-        side: str, 
-        pos_side: str, 
-        entry: float, 
-        tp: float, 
+        self,
+        api: Trade.TradeAPI,
+        acc_name: str,
+        side: str,
+        pos_side: str,
+        entry: float,
+        tp: float,
         sl: float,
         size: float,
         flag: str
     ):
         """
-        ⚠️ 下单执行函数
+        ⚠️ 下单执行与通知发送函数
         :param size: 已调整的合约张数
         :param flag: 账户模式 ('0'实盘, '1'模拟盘)
         """
@@ -338,31 +355,85 @@ class BollingerStrategy:
             prefix="DOGE-BB"
         )
         
+        self.log(f"准备下单，订单参数: {order_params}", acc_name)
+        
+        result = None
         # 根据flag决定执行方式
         if flag == '0':  # 实盘模式
+            self.log("执行实盘下单...", acc_name)
             result = api.place_order(**order_params)
             if result and result.get('code') == '0':
                 self.position_counters[acc_name] += 1  # 更新仓位计数
-                self.log(f"{side}单成功: 数量={size}张 @ {entry}", acc_name)
-                self.send_notification(acc_name, side, entry, size, tp, sl)
+                self.log(f"下单成功: {side} {size}张 @ {entry}. 响应: {result}", acc_name)
             else:
                 err = result.get('msg', '未知错误') if result else '无响应'
-                self.log(f"下单失败: {err}", acc_name)
+                self.log(f"下单失败: {err}. 响应: {result}", acc_name)
         else:  # 模拟盘模式
-            self.log(f"[SIM] 忽略下单: {side} {size}张 @ {entry}", acc_name)
-            self.send_notification(acc_name, side, entry, size, tp, sl) # 模拟盘也发通知
+            self.log(f"[模拟] 模拟下单: {side} {size}张 @ {entry}", acc_name)
+            # 模拟盘也发通知，需要一个模拟的result
+            result = {'code': '0', 'msg': '模拟成功', 'data': [{'clOrdId': order_params.get('clOrdId', 'sim-id'), 'sCode': '0', 'sMsg': ''}]}
 
-    def send_notification(self, acc_name: str, side: str, price: float, size: float, tp: float, sl: float):
-        """发送Bark通知"""
-        mode = "实盘" if os.getenv('TRADE_MODE') == 'real' else "模拟"
-        title = f"DOGE {side.upper()}信号触发 ({mode})"
-        content = f"""账户: {acc_name}
-操作: {'做空' if side=='sell' else '做多'}
-价格: {price:.6f}
-数量: {size:.2f}张
-止盈: {tp:.6f}
-止损: {sl:.6f}
-时间: {get_shanghai_time()}"""
+        # 统一发送通知
+        self.send_notification(
+            acc_name=acc_name,
+            side=side,
+            price=entry,
+            size=size,
+            tp=tp,
+            sl=sl,
+            order_params=order_params,
+            result=result,
+            flag=flag
+        )
+
+    def send_notification(self, acc_name: str, side: str, price: float, size: float, tp: float, sl: float, order_params: dict, result: dict, flag: str):
+        """发送符合规范的Bark通知"""
+        
+        # 标题
+        strategy_name = "doge_bollinger_band_reversal_strategy.py"
+        title = f"[{strategy_name}] 信号开仓"
+
+        # 正文
+        shanghai_time = get_shanghai_time()
+        margin = self.params['order_value']
+        
+        # 从result中提取信息
+        code = result.get('code', 'N/A')
+        msg = result.get('msg', 'N/A')
+        cl_ord_id = order_params.get('clOrdId', 'N/A')
+        
+        content_lines = [
+            f"账户: {acc_name}",
+            f"交易标的: {self.inst_id}",
+            f"信号类型: {'做空' if side == 'sell' else '做多'}",
+            f"入场价格: {self.format_price(price)}",
+            f"委托数量: {self.adjust_quantity(size)}",
+            f"保证金: {margin} USDT",
+            f"止盈价格: {self.format_price(tp)}",
+            f"止损价格: {self.format_price(sl)}",
+            f"客户订单ID: {cl_ord_id}",
+            f"时间: {shanghai_time}"
+        ]
+
+        # 处理错误信息
+        if code != '0':
+            content_lines.append("⚠️ 下单失败 ⚠️")
+            # 优先使用 sMsg
+            s_msg = result.get('data', [{}])[0].get('sMsg', '')
+            error_details = s_msg if s_msg else msg
+            content_lines.append(f"错误: {error_details}")
+
+        # 添加服务器响应
+        content_lines.append(f"服务器响应代码: {code}")
+        content_lines.append(f"服务器响应消息: {msg}")
+
+        content = "\n".join(content_lines)
+        
+        # 模拟盘标记
+        if flag == '1':
+            title = f"[模拟] {title}"
+
+        self.log(f"准备发送通知:\n标题: {title}\n内容:\n{content}", acc_name)
         send_bark_notification(title, content)
 
 # ========================
@@ -371,11 +442,13 @@ class BollingerStrategy:
 def main():
     """策略主入口"""
     strategy = BollingerStrategy()
+    strategy.log("策略启动...")
     if not strategy.accounts:
         strategy.log("未配置OKX账户，请设置环境变量")
         return
 
     # 增加日志，显示正在使用的账户信息
+    # 假设所有账户共享K线和信号，使用第一个账户的flag获取数据
     active_account = strategy.accounts[0]
     strategy.log(f"准备为账户 {active_account.get('name', 'N/A')} 获取K线数据, flag={active_account.get('flag', 'N/A')}")
         
@@ -390,13 +463,23 @@ def main():
     if not klines:
         strategy.log("获取K线数据失败，无法继续执行")
         return
+    
+    # 即使没有信号，也计算潜在下单量 (根据规范)
+    latest_close_price = float(klines[0][4])
+    strategy.log(f"最新收盘价: {latest_close_price}")
+    for acc in strategy.accounts:
+        # 这里只为了打印日志，所以不关心返回值
+        strategy.calculate_position_size(latest_close_price, acc['name'])
         
     # 生成并执行信号
     if signal := strategy.generate_signal(klines):
         strategy.log("生成交易信号，准备执行...")
         strategy.execute_trade(signal)
     else:
-        strategy.log("未生成有效交易信号")
+        # generate_signal内部已有日志，这里可以简化
+        strategy.log("流程结束，未触发交易。")
+
+    strategy.log("策略执行完毕。")
 
 if __name__ == "__main__":
     try:
